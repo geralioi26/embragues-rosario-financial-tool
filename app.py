@@ -276,14 +276,15 @@ if st.sidebar.button("💾 GUARDAR VENTA"):
 
 # 3. CALCULADORA MULTI-POS Y QR
 st.markdown("### 💳 Calculadora de Cuotas")
-
-tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET (Maquinita/QR)", "MÁS PAGOS (Maquinita/QR)"], horizontal=True)
+tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET (18 días)", "MÁS PAGOS (18 días)"], horizontal=True)
 
 if "GETNET" in tipo_pos:
-    c1, c3, c6 = 1.038, 1.220, 1.373
+    # Coeficientes Getnet - Arancel + Interés MiPyME + 21% IVA (Sin Retenciones)
+    c1, c3, c6 = 1.0223, 1.1247, 1.2330
     nombre_pos = "GETNET"
 else:
-    c1, c3, c6 = 1.038, 1.220, 1.373
+    # Coeficientes Más Pagos - 18 días (Sin Retenciones)
+    c1, c3, c6 = 1.0286, 1.1450, 1.2898
     nombre_pos = "MÁS PAGOS"
 
 t1 = monto_limpio * c1
@@ -301,8 +302,7 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-st.write(f"**Precios de Lista con {nombre_pos} (Maquinita o QR):**")
-
+st.write(f"**Precios de Lista con {nombre_pos}:**")
 col_a, col_b, col_c = st.columns(3)
 with col_a: st.metric("1 PAGO", f"$ {t1:,.0f}")
 with col_b: st.metric("3 CUOTAS", f"$ {t3/3:,.2f}", f"Total: ${t3:,.0f}")
@@ -322,19 +322,18 @@ mensaje = (
     f"🚗 *EMBRAGUES ROSARIO*\n"
     f"¡Hola! Gracias por tu consulta. Te paso el presupuesto:\n\n"
     f"🚗 *Vehículo:* {vehiculo_input}\n"
-    f"{icono} *Embrague:* {detalle_final}"
+    f"{icono} *Trabajo:* {detalle_final}"
     f"{txt_rectif}\n\n"
     f"💰 *EFECTIVO / TRANSF:* ${monto_limpio:,.0f}\n\n"
-    f"💳 *TARJETA BANCARIA {metodo_txt}:*\n"
-    f"✅ *1 pago:* ${t1:,.0f}\n"
+    f"💳 *TARJETA BANCARIA ({nombre_pos}):*\n"
+    f"✅ *1 pago:* ${t1:,.0f}\n\n"
     f"✅ *3 cuotas de:* ${t3/3:,.2f}\n"
-    f"     (Total: ${t3:,.0f})\n\n"
+    f"      (Total: ${t3:,.0f})\n\n"
     f"✅ *6 cuotas de:* ${t6/6:,.2f}\n"
-    f"     (Total: ${t6:,.0f})\n\n"
+    f"      (Total: ${t6:,.0f})\n\n"
     f"📍 *Dirección:* Crespo 4117, Rosario\n"
     f"📍 *Ubicación:* {maps_link}\n"
-    f"📸 *Instagram:* *@embraguesrosario*\n"
-    f"     {ig_link}\n"
+    f"📸 *Instagram:* @embraguesrosario\n"
     f"⏰ *Horario:* 8:30 a 17:00 hs\n\n"
     f"¡Te esperamos pronto! 🙋🏻"
 )
