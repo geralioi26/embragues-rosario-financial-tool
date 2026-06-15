@@ -27,6 +27,23 @@ except Exception as e:
     st.error(f"Error de conexión: {e}")
     st.stop()
 
+# --- CARGA DE COEFICIENTES DESDE SHEETS ---
+# CAMBIO 1: Los coeficientes ya no están hardcodeados.
+# Se leen desde la pestaña "Configuracion" de tu Google Sheets.
+try:
+    df_config = conn.read(spreadsheet=SHEET_URL, worksheet="Configuracion", ttl=60)
+    config = dict(zip(df_config["Parametro"], df_config["Valor"]))
+    GETNET_1    = float(config.get("GETNET_1_PAGO",    1.0223))
+    GETNET_3    = float(config.get("GETNET_3_CUOTAS",  1.1247))
+    GETNET_6    = float(config.get("GETNET_6_CUOTAS",  1.2330))
+    MASPAGOS_1  = float(config.get("MASPAGOS_1_PAGO",  1.0286))
+    MASPAGOS_3  = float(config.get("MASPAGOS_3_CUOTAS",1.1450))
+    MASPAGOS_6  = float(config.get("MASPAGOS_6_CUOTAS",1.2898))
+except Exception as e:
+    st.warning(f"⚠️ No se pudo leer la hoja 'Configuracion'. Usando valores de respaldo. ({e})")
+    GETNET_1, GETNET_3, GETNET_6       = 1.0223, 1.1247, 1.2330
+    MASPAGOS_1, MASPAGOS_3, MASPAGOS_6 = 1.0286, 1.1450, 1.2898
+
 # --- CARGA DE CATÁLOGOS ---
 try:
     df = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=10)
@@ -155,13 +172,16 @@ def guardar_en_google(categoria, cliente, vehiculo, detalle, monto, costo, prove
 # 2. PANEL DE CARGA
 st.sidebar.header("⚙️ Configuración")
 
-# Inicialización
+# CAMBIO 2: Inicialización defensiva de variables que solo se definen
+# dentro del bloque "Reparación". Evita crashes si se elige otro tipo de trabajo.
 m_kit = ""
 m_forros = ""
 forros_codigo = ""
 forros_costo = 0
 crap_codigo = ""
 crap_costo = 0
+tipo_crap = ""   # ← NUEVO: antes solo existía dentro del bloque Reparación
+m_crap = []      # ← NUEVO: ídem
 
 tipo_item = st.sidebar.selectbox("Tipo de Trabajo:", 
                                 ["Embrague Nuevo (Venta)", 
@@ -279,12 +299,10 @@ st.markdown("### 💳 Calculadora de Cuotas")
 tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET (18 días)", "MÁS PAGOS (18 días)"], horizontal=True)
 
 if "GETNET" in tipo_pos:
-    # Coeficientes Getnet - Arancel + Interés MiPyME + 21% IVA (Sin Retenciones)
-    c1, c3, c6 = 1.0223, 1.1247, 1.2330
+    c1, c3, c6 = GETNET_1, GETNET_3, GETNET_6
     nombre_pos = "GETNET"
 else:
-    # Coeficientes Más Pagos - 18 días (Sin Retenciones)
-    c1, c3, c6 = 1.0286, 1.1450, 1.2898
+    c1, c3, c6 = MASPAGOS_1, MASPAGOS_3, MASPAGOS_6
     nombre_pos = "MÁS PAGOS"
 
 t1 = monto_limpio * c1
@@ -388,5 +406,3 @@ if busqueda:
             st.dataframe(resultados, hide_index=True)
         else:
             st.info("Nada en Distribución todavía.")
-
-
