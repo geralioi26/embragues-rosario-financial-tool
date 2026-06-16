@@ -31,7 +31,7 @@ except Exception as e:
 # CAMBIO 1: Los coeficientes ya no están hardcodeados.
 # Se leen desde la pestaña "Configuracion" de tu Google Sheets.
 try:
-    df_config = conn.read(spreadsheet=SHEET_URL, worksheet="Configuracion", ttl=60)
+    df_config = conn.read(spreadsheet=SHEET_URL, worksheet="Configuracion", ttl=600)
     config = dict(zip(df_config["Parametro"], df_config["Valor"]))
     GETNET_1    = float(config.get("GETNET_1_PAGO",    1.0223))
     GETNET_3    = float(config.get("GETNET_3_CUOTAS",  1.1247))
@@ -46,17 +46,17 @@ except Exception as e:
 
 # --- CARGA DE CATÁLOGOS ---
 try:
-    df = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=10)
-    df_kits = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", ttl=10)
-    df_crapo = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", ttl=10)
-    df_distri = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Distribucion", ttl=10)
+    df = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=600)
+    df_kits = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", ttl=600)
+    df_crapo = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", ttl=600)
+    df_distri = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Distribucion", ttl=600)
 except Exception as e:
     st.warning(f"⚠️ Error al leer los catálogos: {e}")
 
 # --- FUNCIÓN AUXILIAR: GUARDAR EN CATÁLOGO ---
 def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
     try:
-        df_kits = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", ttl=5)
+        df_kits = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", ttl=600)
         marca_limpia = str(marca).upper()
         col_cod = f"Codigo_{marca_limpia}"
         col_pre = f"Precio_{marca_limpia}"
@@ -105,7 +105,7 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
 # --- FUNCIÓN PARA GUARDAR CRAPODINAS NUEVAS ---
 def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca):
     try:
-        df_crapo = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", ttl=5)
+        df_crapo = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", ttl=600)
         marca_limpia = str(marca).upper()
         col_cod = f"Codigo_{marca_limpia}"
         col_pre = f"Precio_{marca_limpia}"
@@ -160,7 +160,7 @@ def guardar_en_google(categoria, cliente, vehiculo, detalle, monto, costo, prove
         "Marca_Forros", "Cod_Forros", "Costo_Forros", "Ganancia"
     ]
     try:
-        df_existente = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=10)
+        df_existente = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=600)
     except Exception as e:
         st.error(f"Error al leer hoja Ventas: {e}")
         st.stop()
@@ -363,7 +363,7 @@ st.link_button("🟢 ENVIAR PRESUPUESTO POR WHATSAPP", link_wa)
 st.divider()
 st.subheader("📋 Últimos Movimientos")
 try:
-    df_ver = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=10)
+    df_ver = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=600)
     if not df_ver.empty:
         st.dataframe(df_ver.tail(5)[::-1], use_container_width=True)
     else:
