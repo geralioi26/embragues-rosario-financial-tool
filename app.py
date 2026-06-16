@@ -17,7 +17,7 @@ st.markdown("Crespo 4117, Rosario | **IIBB: EXENTO**")
 # ==========================================
 # 🚨 PEGA TU LINK ACÁ ABAJO ENTRE LAS COMILLAS
 # ==========================================
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1YJHJ006kr-izLHG9Ib5CRUX5VUdu6INRDsKn4u0x32Y/edit?gid=0#gid=0"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1YJHJ006kr-izLHG9Ib5CRUX5VUdu6INRDsKn4u0x32Y/edit"
 # ==========================================
 
 # --- CONEXIÓN SEGURA ---
@@ -258,7 +258,7 @@ foto_repuesto = st.sidebar.file_uploader("📷 Sacar foto a la caja/repuesto", t
 if foto_repuesto:
     st.sidebar.image(foto_repuesto, caption="Vista previa", use_container_width=True)
 
-ganancia = (monto_limpio - precio_compra) if monto_limpio > 0 else 0
+ganancia = monto_limpio - precio_compra
 if monto_limpio > 0:
     st.sidebar.metric("Ganancia Estimada", f"$ {ganancia:,.0f}")
 
