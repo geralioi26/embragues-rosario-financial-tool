@@ -29,18 +29,13 @@ except Exception as e:
 
 # ==============================================================
 # SOLUCIÓN RATE LIMIT: funciones cacheadas con @st.cache_data
-# Cada hoja se lee UNA SOLA VEZ y queda en memoria 10 minutos.
-# Streamlit NO vuelve a llamar a Google Sheets mientras el
-# usuario interactúa con los widgets del formulario.
 # ==============================================================
 
 @st.cache_data(ttl=600, show_spinner=False)
 def leer_hoja(url, hoja):
-    """Lee una hoja de Google Sheets y cachea el resultado 10 minutos."""
     return conn.read(spreadsheet=url, worksheet=hoja)
 
 def leer_hoja_fresca(url, hoja):
-    """Lee una hoja SIN caché. Solo para operaciones de escritura (guardar venta)."""
     return conn.read(spreadsheet=url, worksheet=hoja, ttl=0)
 
 # --- CARGA DE COEFICIENTES DESDE SHEETS (cacheada) ---
@@ -71,27 +66,22 @@ except Exception as e:
 # --- FUNCIÓN AUXILIAR: GUARDAR EN CATÁLOGO DE KITS ---
 def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
     try:
-        # Lectura fresca justo antes de escribir para no pisar datos nuevos
         df = leer_hoja_fresca(SHEET_URL, "Catalogo_Kits")
         marca_limpia = str(marca).upper()
         col_cod = f"Codigo_{marca_limpia}"
         col_pre = f"Precio_{marca_limpia}"
-
         if col_cod not in df.columns:
             st.warning(f"⚠️ La marca {marca_limpia} no tiene columnas en Kits.")
             return
-
         vehiculo_limpio = str(vehiculo).strip().lower()
         desc_limpia     = str(descripcion).strip().lower()
         cod_buscado     = str(codigo).split('.')[0].strip()
-
         filtro_exacto = (
             (df['Vehiculo'].astype(str).str.strip().str.lower() == vehiculo_limpio) &
             (df['Descripcion'].astype(str).str.strip().str.lower() == desc_limpia)
         )
         codigos_col   = df[col_cod].astype(str).str.split('.').str[0].str.strip()
         filtro_codigo = codigos_col == cod_buscado
-
         if filtro_exacto.any():
             idx = df.index[filtro_exacto][0]
             df.at[idx, col_cod] = codigo
@@ -112,12 +102,9 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
             nueva_fila[col_pre]       = precio
             df = pd.concat([df, pd.DataFrame([nueva_fila])], ignore_index=True)
             msg = f"✨ Nuevo Kit en catálogo: {vehiculo}"
-
         conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", data=df)
-        # Invalida el caché de esta hoja para que la próxima lectura sea fresca
         leer_hoja.clear()
         st.toast(msg, icon="📦")
-
     except Exception as e:
         st.error(f"Error en catálogo de kits: {e}")
 
@@ -128,22 +115,18 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
         marca_limpia = str(marca).upper()
         col_cod = f"Codigo_{marca_limpia}"
         col_pre = f"Precio_{marca_limpia}"
-
         if col_cod not in df.columns:
             st.warning(f"⚠️ La marca {marca_limpia} no tiene columnas.")
             return
-
         vehiculo_limpio = str(vehiculo).strip().lower()
         desc_limpia     = str(descripcion).strip().lower()
         cod_buscado     = str(codigo).split('.')[0].strip()
-
         filtro_exacto = (
             (df['Vehiculo'].astype(str).str.strip().str.lower() == vehiculo_limpio) &
             (df['Descripcion'].astype(str).str.strip().str.lower() == desc_limpia)
         )
         codigos_col   = df[col_cod].astype(str).str.split('.').str[0].str.strip()
         filtro_codigo = codigos_col == cod_buscado
-
         if filtro_exacto.any():
             idx = df.index[filtro_exacto][0]
             df.at[idx, col_cod] = codigo
@@ -164,11 +147,9 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
             nueva_fila[col_pre]       = precio
             df = pd.concat([df, pd.DataFrame([nueva_fila])], ignore_index=True)
             msg = f"✨ Nuevo en catálogo: {vehiculo}"
-
         conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", data=df)
         leer_hoja.clear()
         st.toast(msg, icon="⚙️")
-
     except Exception as e:
         st.error(f"Error al actualizar catálogo de crapodinas: {e}")
 
@@ -184,12 +165,10 @@ def guardar_en_google(categoria, cliente, vehiculo, detalle, monto, costo, prove
         "Marca_Forros", "Cod_Forros", "Costo_Forros", "Ganancia"
     ]
     try:
-        # Lectura fresca para no perder ventas guardadas durante el caché
         df_existente = leer_hoja_fresca(SHEET_URL, "Ventas")
     except Exception as e:
         st.error(f"Error al leer hoja Ventas: {e}")
         st.stop()
-
     nuevo_reg    = pd.DataFrame([[fecha_hoy, categoria, cliente, vehiculo, detalle,
                                   monto, costo, proveedor, cod_kit, cod_crap,
                                   f_pago, e_cliente, e_prov,
@@ -197,21 +176,32 @@ def guardar_en_google(categoria, cliente, vehiculo, detalle, monto, costo, prove
                                 columns=columnas)
     df_actualizado = pd.concat([df_existente, nuevo_reg], ignore_index=True)
     conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_actualizado)
-    # Invalida el caché para que el historial muestre la venta recién guardada
     leer_hoja.clear()
+
+# --- FUNCIÓN PARA MARCAR COBRO ---
+def marcar_como_pagado(idx_fila, forma_pago):
+    try:
+        df = leer_hoja_fresca(SHEET_URL, "Ventas")
+        df.at[idx_fila, "Estado_Cobro"]  = "Pagado"
+        df.at[idx_fila, "Forma_de_pago"] = forma_pago
+        conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df)
+        leer_hoja.clear()
+        st.toast("✅ Cobro registrado", icon="💰")
+    except Exception as e:
+        st.error(f"Error al actualizar cobro: {e}")
 
 # 2. PANEL DE CARGA
 st.sidebar.header("⚙️ Configuración")
 
-# Inicialización defensiva de variables del bloque Reparación
-m_kit        = ""
-m_forros     = ""
+# Inicialización defensiva
+m_kit         = ""
+m_forros      = ""
 forros_codigo = ""
 forros_costo  = 0
-crap_codigo  = ""
-crap_costo   = 0
-tipo_crap    = ""
-m_crap       = []
+crap_codigo   = ""
+crap_costo    = 0
+tipo_crap     = ""
+m_crap        = []
 
 tipo_item = st.sidebar.selectbox("Tipo de Trabajo:",
                                  ["Embrague Nuevo (Venta)",
@@ -229,13 +219,12 @@ elif "Reparación" in tipo_item:
     m_crap = st.sidebar.multiselect("Marcas de Crapodina:",
                                     ["Luk", "Skf", "Ina", "Dbh", "The"],
                                     default=["Luk", "Skf"])
-    crap_codigo  = st.sidebar.text_input("Código de Crapodina:", "")
-    crap_costo   = st.sidebar.number_input("Costo de Crapodina ($):", min_value=0, value=0)
-    tipo_crap    = st.sidebar.selectbox("⚙️ Tipo de Crapodina:", ["Hidráulica", "Mecánica"])
-    m_forros     = st.sidebar.selectbox("Marca de Forros:", ["IAR", "Fras-le", "Termolite", "Otro"])
+    crap_codigo   = st.sidebar.text_input("Código de Crapodina:", "")
+    crap_costo    = st.sidebar.number_input("Costo de Crapodina ($):", min_value=0, value=0)
+    tipo_crap     = st.sidebar.selectbox("⚙️ Tipo de Crapodina:", ["Hidráulica", "Mecánica"])
+    m_forros      = st.sidebar.selectbox("Marca de Forros:", ["IAR", "Fras-le", "Termolite", "Otro"])
     forros_codigo = st.sidebar.text_input("Código de Forros:", "")
     forros_costo  = st.sidebar.number_input("Costo de Forros ($):", min_value=0, value=0)
-
     m_neg = [f"*{m}*" for m in m_crap]
     if len(m_neg) > 1:
         t_m = ", ".join(m_neg[:-1]) + " o " + m_neg[-1]
@@ -248,7 +237,7 @@ else:
     cat_f, icono, incl_rectif = "Venta", "🛠️", False
     sugerencia = "KIT de distribución"
 
-monto_limpio  = st.sidebar.number_input("Precio de VENTA ($):", min_value=0, value=0)
+monto_limpio   = st.sidebar.number_input("Precio de VENTA ($):", min_value=0, value=0)
 vehiculo_input = st.sidebar.text_input("Vehículo:", "citroen c4 1.6")
 cliente_input  = st.sidebar.text_input("Nombre del Cliente:", "Consumidor Final")
 detalle_excel  = st.sidebar.text_input("📝 Detalle para Excel:", value="Reparación completa")
@@ -299,22 +288,37 @@ else:
     cod_kit_final  = codigo_manual
     cod_crap_final = ""
 
+# =============================================
+# MEJORA 1: CONFIRMACIÓN ANTES DE GUARDAR
+# =============================================
 if st.sidebar.button("💾 GUARDAR VENTA"):
-    guardar_en_google(cat_f, cliente_input, vehiculo_input, detalle_excel,
-                      monto_limpio, precio_compra, proveedor_input,
-                      cod_kit_final, cod_crap_final, f_pago_input,
-                      estado_cliente, estado_p_prov,
-                      m_forros, forros_codigo, forros_costo, ganancia)
+    st.session_state["confirmar_venta"] = True
 
-    if cod_kit_final:
-        marca_kit_final = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
-        actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, monto_limpio, marca_kit_final)
-
-    if cod_crap_final:
-        marca_elegida = m_crap[0] if m_crap else "OTRA"
-        actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}", cod_crap_final, crap_costo, marca_elegida)
-
-    st.sidebar.success(f"¡Venta de $ {monto_limpio:,.0f} guardada y catálogos actualizados!")
+if st.session_state.get("confirmar_venta"):
+    st.sidebar.warning(
+        f"⚠️ **¿Confirmar esta venta?**\n\n"
+        f"🚗 **Vehículo:** {vehiculo_input}\n\n"
+        f"👤 **Cliente:** {cliente_input}\n\n"
+        f"💰 **Monto:** ${monto_limpio:,.0f}"
+    )
+    col_si, col_no = st.sidebar.columns(2)
+    if col_si.button("✅ Confirmar", use_container_width=True):
+        st.session_state["confirmar_venta"] = False
+        guardar_en_google(cat_f, cliente_input, vehiculo_input, detalle_excel,
+                          monto_limpio, precio_compra, proveedor_input,
+                          cod_kit_final, cod_crap_final, f_pago_input,
+                          estado_cliente, estado_p_prov,
+                          m_forros, forros_codigo, forros_costo, ganancia)
+        if cod_kit_final:
+            marca_kit_final = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
+            actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, monto_limpio, marca_kit_final)
+        if cod_crap_final:
+            marca_elegida = m_crap[0] if m_crap else "OTRA"
+            actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}", cod_crap_final, crap_costo, marca_elegida)
+        st.sidebar.success(f"✅ ¡Venta de ${monto_limpio:,.0f} guardada!")
+    if col_no.button("❌ Cancelar", use_container_width=True):
+        st.session_state["confirmar_venta"] = False
+        st.sidebar.info("Venta cancelada.")
 
 # 3. CALCULADORA MULTI-POS
 st.markdown("### 💳 Calculadora de Cuotas")
@@ -345,9 +349,9 @@ st.markdown(f"""
 
 st.write(f"**Precios de Lista con {nombre_pos}:**")
 col_a, col_b, col_c = st.columns(3)
-with col_a: st.metric("1 PAGO",    f"$ {t1:,.0f}")
-with col_b: st.metric("3 CUOTAS",  f"$ {t3/3:,.2f}", f"Total: ${t3:,.0f}")
-with col_c: st.metric("6 CUOTAS",  f"$ {t6/6:,.2f}", f"Total: ${t6:,.0f}")
+with col_a: st.metric("1 PAGO",   f"$ {t1:,.0f}")
+with col_b: st.metric("3 CUOTAS", f"$ {t3/3:,.2f}", f"Total: ${t3:,.0f}")
+with col_c: st.metric("6 CUOTAS", f"$ {t6/6:,.2f}", f"Total: ${t6:,.0f}")
 
 # 4. WHATSAPP
 txt_rectif = "\n✅ *Incluye rectificación y balanceo de volante*" if incl_rectif else ""
@@ -387,6 +391,95 @@ try:
         st.info("La planilla está vacía todavía.")
 except Exception as e:
     st.warning("⚠️ No se pudo cargar el historial.")
+
+# =============================================
+# MEJORA 2: RESUMEN DE VENTAS
+# =============================================
+st.divider()
+st.header("📊 Resumen de Ventas")
+
+try:
+    df_res = leer_hoja(SHEET_URL, "Ventas").copy()
+    if not df_res.empty and "Fecha" in df_res.columns:
+        df_res["Fecha_dt"] = pd.to_datetime(df_res["Fecha"], format="%d/%m/%Y %H:%M", errors="coerce")
+        df_res["Venta $"]  = pd.to_numeric(df_res["Venta $"],  errors="coerce").fillna(0)
+        df_res["Ganancia"] = pd.to_numeric(df_res["Ganancia"], errors="coerce").fillna(0)
+
+        ahora    = datetime.now() - timedelta(hours=3)
+        hoy      = ahora.date()
+        lun      = hoy - timedelta(days=hoy.weekday())
+        primer_d = hoy.replace(day=1)
+
+        mask_hoy  = df_res["Fecha_dt"].dt.date == hoy
+        mask_sem  = df_res["Fecha_dt"].dt.date >= lun
+        mask_mes  = df_res["Fecha_dt"].dt.date >= primer_d
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("📅 Hoy",
+                      f"${df_res[mask_hoy]['Venta $'].sum():,.0f}",
+                      f"{mask_hoy.sum()} trabajo(s)")
+        with col2:
+            st.metric("📆 Esta semana",
+                      f"${df_res[mask_sem]['Venta $'].sum():,.0f}",
+                      f"{mask_sem.sum()} trabajo(s)")
+        with col3:
+            st.metric("🗓️ Este mes",
+                      f"${df_res[mask_mes]['Venta $'].sum():,.0f}",
+                      f"{mask_mes.sum()} trabajo(s)")
+
+        st.divider()
+        col4, col5 = st.columns(2)
+        with col4:
+            st.metric("💰 Ganancia del mes",
+                      f"${df_res[mask_mes]['Ganancia'].sum():,.0f}")
+        with col5:
+            if "Categoría" in df_res.columns:
+                tipos = df_res[mask_mes]["Categoría"].value_counts()
+                resumen_tipos = " | ".join([f"{k}: {v}" for k, v in tipos.items()])
+                st.metric("🔧 Trabajos del mes por tipo", resumen_tipos if resumen_tipos else "—")
+
+    else:
+        st.info("Todavía no hay ventas registradas para mostrar.")
+except Exception as e:
+    st.warning(f"⚠️ No se pudo cargar el resumen: {e}")
+
+# =============================================
+# MEJORA 3: COBROS PENDIENTES
+# =============================================
+st.divider()
+st.header("💸 Cobros Pendientes")
+
+try:
+    df_pend = leer_hoja(SHEET_URL, "Ventas").copy()
+    if not df_pend.empty and "Estado_Cobro" in df_pend.columns:
+        pendientes = df_pend[df_pend["Estado_Cobro"].isin(["Debe", "Seña"])].copy()
+        if pendientes.empty:
+            st.success("✅ No hay cobros pendientes.")
+        else:
+            st.warning(f"Hay **{len(pendientes)}** cobro(s) pendiente(s):")
+            lista_pagos_cobro = [
+                "Efectivo", "Transferencia", "Débito",
+                "BNA - 1 Pago", "BNA - 3 Cuotas", "BNA - 6 Cuotas",
+                "Getnet - 1 Pago", "Getnet - 3 Cuotas", "Getnet - 6 Cuotas",
+                "Combinado", "Otro"
+            ]
+            for pos, (idx, fila) in enumerate(pendientes.iterrows()):
+                with st.expander(
+                    f"{'🔴' if fila.get('Estado_Cobro') == 'Debe' else '🟡'} "
+                    f"{fila.get('Fecha','—')} | {fila.get('Vehículo','—')} | "
+                    f"{fila.get('Cliente','—')} | ${float(fila.get('Venta $', 0)):,.0f} "
+                    f"({fila.get('Estado_Cobro','—')})"
+                ):
+                    fp_key = f"fp_cobro_{pos}_{idx}"
+                    forma_cobro = st.selectbox("Forma de pago:", lista_pagos_cobro, key=fp_key)
+                    if st.button("✅ Marcar como Pagado", key=f"pagar_{pos}_{idx}"):
+                        marcar_como_pagado(idx, forma_cobro)
+                        st.rerun()
+    else:
+        st.info("No hay datos de ventas todavía.")
+except Exception as e:
+    st.warning(f"⚠️ No se pudo cargar los pendientes: {e}")
 
 # 6. BUSCADOR DE CATÁLOGO
 st.divider()
