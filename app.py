@@ -17,7 +17,7 @@ st.markdown("Crespo 4117, Rosario | **IIBB: EXENTO**")
 # ==========================================
 # 🚨 PEGA TU LINK ACÁ ABAJO ENTRE LAS COMILLAS
 # ==========================================
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1YJHJ006kr-izLHG9Ib5CRUX5VUdu6INRDsKn4u0x32Y/edit?gid=0#gid=0" 
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1YJHJ006kr-izLHG9Ib5CRUX5VUdu6INRDsKn4u0x32Y/edit?gid=0#gid=0"
 # ==========================================
 
 # --- CONEXIÓN SEGURA ---
@@ -27,11 +27,25 @@ except Exception as e:
     st.error(f"Error de conexión: {e}")
     st.stop()
 
-# --- CARGA DE COEFICIENTES DESDE SHEETS ---
-# CAMBIO 1: Los coeficientes ya no están hardcodeados.
-# Se leen desde la pestaña "Configuracion" de tu Google Sheets.
+# ==============================================================
+# SOLUCIÓN RATE LIMIT: funciones cacheadas con @st.cache_data
+# Cada hoja se lee UNA SOLA VEZ y queda en memoria 10 minutos.
+# Streamlit NO vuelve a llamar a Google Sheets mientras el
+# usuario interactúa con los widgets del formulario.
+# ==============================================================
+
+@st.cache_data(ttl=600, show_spinner=False)
+def leer_hoja(url, hoja):
+    """Lee una hoja de Google Sheets y cachea el resultado 10 minutos."""
+    return conn.read(spreadsheet=url, worksheet=hoja)
+
+def leer_hoja_fresca(url, hoja):
+    """Lee una hoja SIN caché. Solo para operaciones de escritura (guardar venta)."""
+    return conn.read(spreadsheet=url, worksheet=hoja, ttl=0)
+
+# --- CARGA DE COEFICIENTES DESDE SHEETS (cacheada) ---
 try:
-    df_config = conn.read(spreadsheet=SHEET_URL, worksheet="Configuracion", ttl=600)
+    df_config = leer_hoja(SHEET_URL, "Configuracion")
     config = dict(zip(df_config["Parametro"], df_config["Valor"]))
     GETNET_1    = float(config.get("GETNET_1_PAGO",    1.0223))
     GETNET_3    = float(config.get("GETNET_3_CUOTAS",  1.1247))
@@ -40,63 +54,68 @@ try:
     MASPAGOS_3  = float(config.get("MASPAGOS_3_CUOTAS",1.1450))
     MASPAGOS_6  = float(config.get("MASPAGOS_6_CUOTAS",1.2898))
 except Exception as e:
-    st.warning(f"⚠️ No se pudo leer la hoja 'Configuracion'. Usando valores de respaldo. ({e})")
-    GETNET_1, GETNET_3, GETNET_6       = 1.0223, 1.1247, 1.2330
+    st.warning(f"⚠️ No se pudo leer 'Configuracion'. Usando valores de respaldo. ({e})")
+    GETNET_1, GETNET_3, GETNET_6        = 1.0223, 1.1247, 1.2330
     MASPAGOS_1, MASPAGOS_3, MASPAGOS_6 = 1.0286, 1.1450, 1.2898
 
-# --- CARGA DE CATÁLOGOS ---
+# --- CARGA DE CATÁLOGOS (cacheada) ---
 try:
-    df = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=600)
-    df_kits = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", ttl=600)
-    df_crapo = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", ttl=600)
-    df_distri = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Distribucion", ttl=600)
+    df_kits   = leer_hoja(SHEET_URL, "Catalogo_Kits")
+    df_crapo  = leer_hoja(SHEET_URL, "Catalogo_Crapodinas")
+    df_distri = leer_hoja(SHEET_URL, "Catalogo_Distribucion")
+    df_ventas = leer_hoja(SHEET_URL, "Ventas")
 except Exception as e:
     st.warning(f"⚠️ Error al leer los catálogos: {e}")
+    df_kits = df_crapo = df_distri = df_ventas = pd.DataFrame()
 
-# --- FUNCIÓN AUXILIAR: GUARDAR EN CATÁLOGO ---
+# --- FUNCIÓN AUXILIAR: GUARDAR EN CATÁLOGO DE KITS ---
 def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
     try:
-        df_kits = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", ttl=600)
+        # Lectura fresca justo antes de escribir para no pisar datos nuevos
+        df = leer_hoja_fresca(SHEET_URL, "Catalogo_Kits")
         marca_limpia = str(marca).upper()
         col_cod = f"Codigo_{marca_limpia}"
         col_pre = f"Precio_{marca_limpia}"
 
-        if col_cod not in df_kits.columns:
+        if col_cod not in df.columns:
             st.warning(f"⚠️ La marca {marca_limpia} no tiene columnas en Kits.")
             return
 
         vehiculo_limpio = str(vehiculo).strip().lower()
-        desc_limpia = str(descripcion).strip().lower()
-        cod_buscado = str(codigo).split('.')[0].strip()
+        desc_limpia     = str(descripcion).strip().lower()
+        cod_buscado     = str(codigo).split('.')[0].strip()
 
-        filtro_exacto = (df_kits['Vehiculo'].astype(str).str.strip().str.lower() == vehiculo_limpio) & \
-                        (df_kits['Descripcion'].astype(str).str.strip().str.lower() == desc_limpia)
-        
-        codigos_col = df_kits[col_cod].astype(str).str.split('.').str[0].str.strip()
+        filtro_exacto = (
+            (df['Vehiculo'].astype(str).str.strip().str.lower() == vehiculo_limpio) &
+            (df['Descripcion'].astype(str).str.strip().str.lower() == desc_limpia)
+        )
+        codigos_col   = df[col_cod].astype(str).str.split('.').str[0].str.strip()
         filtro_codigo = codigos_col == cod_buscado
 
         if filtro_exacto.any():
-            idx = df_kits.index[filtro_exacto][0]
-            df_kits.at[idx, col_cod] = codigo
-            df_kits.at[idx, col_pre] = precio
+            idx = df.index[filtro_exacto][0]
+            df.at[idx, col_cod] = codigo
+            df.at[idx, col_pre] = precio
             msg = f"✅ Kit {marca_limpia} actualizado para {vehiculo}"
         elif filtro_codigo.any():
-            idx = df_kits.index[filtro_codigo][0]
-            v_actual = str(df_kits.at[idx, 'Vehiculo'])
+            idx = df.index[filtro_codigo][0]
+            v_actual = str(df.at[idx, 'Vehiculo'])
             if vehiculo_limpio not in v_actual.lower():
-                df_kits.at[idx, 'Vehiculo'] = f"{v_actual} / {vehiculo}"
-            df_kits.at[idx, col_pre] = precio
+                df.at[idx, 'Vehiculo'] = f"{v_actual} / {vehiculo}"
+            df.at[idx, col_pre] = precio
             msg = f"🔗 Kit equivalente detectado: {vehiculo}"
         else:
-            nueva_fila = {col: "" for col in df_kits.columns}
-            nueva_fila["Vehiculo"] = vehiculo
+            nueva_fila = {col: "" for col in df.columns}
+            nueva_fila["Vehiculo"]    = vehiculo
             nueva_fila["Descripcion"] = descripcion
-            nueva_fila[col_cod] = codigo
-            nueva_fila[col_pre] = precio
-            df_kits = pd.concat([df_kits, pd.DataFrame([nueva_fila])], ignore_index=True)
+            nueva_fila[col_cod]       = codigo
+            nueva_fila[col_pre]       = precio
+            df = pd.concat([df, pd.DataFrame([nueva_fila])], ignore_index=True)
             msg = f"✨ Nuevo Kit en catálogo: {vehiculo}"
 
-        conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", data=df_kits)
+        conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", data=df)
+        # Invalida el caché de esta hoja para que la próxima lectura sea fresca
+        leer_hoja.clear()
         st.toast(msg, icon="📦")
 
     except Exception as e:
@@ -105,89 +124,100 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
 # --- FUNCIÓN PARA GUARDAR CRAPODINAS NUEVAS ---
 def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca):
     try:
-        df_crapo = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", ttl=600)
+        df = leer_hoja_fresca(SHEET_URL, "Catalogo_Crapodinas")
         marca_limpia = str(marca).upper()
         col_cod = f"Codigo_{marca_limpia}"
         col_pre = f"Precio_{marca_limpia}"
 
-        if col_cod not in df_crapo.columns:
+        if col_cod not in df.columns:
             st.warning(f"⚠️ La marca {marca_limpia} no tiene columnas.")
             return
 
         vehiculo_limpio = str(vehiculo).strip().lower()
-        desc_limpia = str(descripcion).strip().lower()
-        cod_buscado = str(codigo).split('.')[0].strip()
+        desc_limpia     = str(descripcion).strip().lower()
+        cod_buscado     = str(codigo).split('.')[0].strip()
 
-        filtro_exacto = (df_crapo['Vehiculo'].astype(str).str.strip().str.lower() == vehiculo_limpio) & \
-                        (df_crapo['Descripcion'].astype(str).str.strip().str.lower() == desc_limpia)
-        
-        codigos_col = df_crapo[col_cod].astype(str).str.split('.').str[0].str.strip()
+        filtro_exacto = (
+            (df['Vehiculo'].astype(str).str.strip().str.lower() == vehiculo_limpio) &
+            (df['Descripcion'].astype(str).str.strip().str.lower() == desc_limpia)
+        )
+        codigos_col   = df[col_cod].astype(str).str.split('.').str[0].str.strip()
         filtro_codigo = codigos_col == cod_buscado
 
         if filtro_exacto.any():
-            idx = df_crapo.index[filtro_exacto][0]
-            df_crapo.at[idx, col_cod] = codigo
-            df_crapo.at[idx, col_pre] = precio
+            idx = df.index[filtro_exacto][0]
+            df.at[idx, col_cod] = codigo
+            df.at[idx, col_pre] = precio
             msg = f"✅ Datos actualizados: {vehiculo} ({marca_limpia})"
         elif filtro_codigo.any():
-            idx = df_crapo.index[filtro_codigo][0]
-            v_actual = str(df_crapo.at[idx, 'Vehiculo'])
+            idx = df.index[filtro_codigo][0]
+            v_actual = str(df.at[idx, 'Vehiculo'])
             if vehiculo_limpio not in v_actual.lower():
-                df_crapo.at[idx, 'Vehiculo'] = f"{v_actual} / {vehiculo}"
-            df_crapo.at[idx, col_pre] = precio
+                df.at[idx, 'Vehiculo'] = f"{v_actual} / {vehiculo}"
+            df.at[idx, col_pre] = precio
             msg = f"🔗 Equivalencia: {codigo} ahora también en {vehiculo}"
         else:
-            nueva_fila = {col: "" for col in df_crapo.columns}
-            nueva_fila["Vehiculo"] = vehiculo
+            nueva_fila = {col: "" for col in df.columns}
+            nueva_fila["Vehiculo"]    = vehiculo
             nueva_fila["Descripcion"] = descripcion
-            nueva_fila[col_cod] = codigo
-            nueva_fila[col_pre] = precio
-            df_crapo = pd.concat([df_crapo, pd.DataFrame([nueva_fila])], ignore_index=True)
+            nueva_fila[col_cod]       = codigo
+            nueva_fila[col_pre]       = precio
+            df = pd.concat([df, pd.DataFrame([nueva_fila])], ignore_index=True)
             msg = f"✨ Nuevo en catálogo: {vehiculo}"
 
-        conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", data=df_crapo)
+        conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", data=df)
+        leer_hoja.clear()
         st.toast(msg, icon="⚙️")
 
     except Exception as e:
         st.error(f"Error al actualizar catálogo de crapodinas: {e}")
 
-def guardar_en_google(categoria, cliente, vehiculo, detalle, monto, costo, proveedor, cod_kit, cod_crap, f_pago, e_cliente, e_prov, m_forros, c_forros, costo_f, ganancia):
+# --- FUNCIÓN PRINCIPAL DE GUARDADO ---
+def guardar_en_google(categoria, cliente, vehiculo, detalle, monto, costo, proveedor,
+                      cod_kit, cod_crap, f_pago, e_cliente, e_prov,
+                      m_forros, c_forros, costo_f, ganancia):
     fecha_hoy = (datetime.now() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
     columnas = [
-        "Fecha", "Categoría", "Cliente", "Vehículo", "Detalle", 
-        "Venta $", "Compra $", "Proveedor", "Código", "Cod_Crapodina", 
-        "Forma_de_pago", "Estado_Cobro", "Estado_Pago_Prov", 
+        "Fecha", "Categoría", "Cliente", "Vehículo", "Detalle",
+        "Venta $", "Compra $", "Proveedor", "Código", "Cod_Crapodina",
+        "Forma_de_pago", "Estado_Cobro", "Estado_Pago_Prov",
         "Marca_Forros", "Cod_Forros", "Costo_Forros", "Ganancia"
     ]
     try:
-        df_existente = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=600)
+        # Lectura fresca para no perder ventas guardadas durante el caché
+        df_existente = leer_hoja_fresca(SHEET_URL, "Ventas")
     except Exception as e:
         st.error(f"Error al leer hoja Ventas: {e}")
         st.stop()
-    
-    nuevo_reg = pd.DataFrame([[fecha_hoy, categoria, cliente, vehiculo, detalle, monto, costo, proveedor, cod_kit, cod_crap, f_pago, e_cliente, e_prov, m_forros, c_forros, costo_f, ganancia]], columns=columnas)
+
+    nuevo_reg    = pd.DataFrame([[fecha_hoy, categoria, cliente, vehiculo, detalle,
+                                  monto, costo, proveedor, cod_kit, cod_crap,
+                                  f_pago, e_cliente, e_prov,
+                                  m_forros, c_forros, costo_f, ganancia]],
+                                columns=columnas)
     df_actualizado = pd.concat([df_existente, nuevo_reg], ignore_index=True)
     conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_actualizado)
+    # Invalida el caché para que el historial muestre la venta recién guardada
+    leer_hoja.clear()
 
 # 2. PANEL DE CARGA
 st.sidebar.header("⚙️ Configuración")
 
-# CAMBIO 2: Inicialización defensiva de variables que solo se definen
-# dentro del bloque "Reparación". Evita crashes si se elige otro tipo de trabajo.
-m_kit = ""
-m_forros = ""
+# Inicialización defensiva de variables del bloque Reparación
+m_kit        = ""
+m_forros     = ""
 forros_codigo = ""
-forros_costo = 0
-crap_codigo = ""
-crap_costo = 0
-tipo_crap = ""   # ← NUEVO: antes solo existía dentro del bloque Reparación
-m_crap = []      # ← NUEVO: ídem
+forros_costo  = 0
+crap_codigo  = ""
+crap_costo   = 0
+tipo_crap    = ""
+m_crap       = []
 
-tipo_item = st.sidebar.selectbox("Tipo de Trabajo:", 
-                                ["Embrague Nuevo (Venta)", 
-                                 "Reparación de Embrague", 
-                                 "Kit de Distribución",
-                                 "Otro"])
+tipo_item = st.sidebar.selectbox("Tipo de Trabajo:",
+                                 ["Embrague Nuevo (Venta)",
+                                  "Reparación de Embrague",
+                                  "Kit de Distribución",
+                                  "Otro"])
 
 if "Nuevo" in tipo_item:
     cat_f, icono, incl_rectif = "Venta", "⚙️", True
@@ -196,32 +226,33 @@ if "Nuevo" in tipo_item:
     sugerencia = f"KIT nuevo marca *{m_kit}*"
 elif "Reparación" in tipo_item:
     cat_f, icono, incl_rectif = "Reparación", "🔧", False
-    m_crap = st.sidebar.multiselect("Marcas de Crapodina:", ["Luk", "Skf", "Ina", "Dbh", "The"], default=["Luk", "Skf"])
-    
-    crap_codigo = st.sidebar.text_input("Código de Crapodina:", "")
-    crap_costo = st.sidebar.number_input("Costo de Crapodina ($):", min_value=0, value=0)
-    tipo_crap = st.sidebar.selectbox("⚙️ Tipo de Crapodina:", ["Hidráulica", "Mecánica"])
-
-    m_forros = st.sidebar.selectbox("Marca de Forros:", ["IAR", "Fras-le", "Termolite", "Otro"])
+    m_crap = st.sidebar.multiselect("Marcas de Crapodina:",
+                                    ["Luk", "Skf", "Ina", "Dbh", "The"],
+                                    default=["Luk", "Skf"])
+    crap_codigo  = st.sidebar.text_input("Código de Crapodina:", "")
+    crap_costo   = st.sidebar.number_input("Costo de Crapodina ($):", min_value=0, value=0)
+    tipo_crap    = st.sidebar.selectbox("⚙️ Tipo de Crapodina:", ["Hidráulica", "Mecánica"])
+    m_forros     = st.sidebar.selectbox("Marca de Forros:", ["IAR", "Fras-le", "Termolite", "Otro"])
     forros_codigo = st.sidebar.text_input("Código de Forros:", "")
-    forros_costo = st.sidebar.number_input("Costo de Forros ($):", min_value=0, value=0)
+    forros_costo  = st.sidebar.number_input("Costo de Forros ($):", min_value=0, value=0)
 
     m_neg = [f"*{m}*" for m in m_crap]
-    if len(m_neg) > 1: t_m = ", ".join(m_neg[:-1]) + " o " + m_neg[-1]
-    elif m_neg: t_m = m_neg[0]
-    else: t_m = "*primera marca*"
-    
+    if len(m_neg) > 1:
+        t_m = ", ".join(m_neg[:-1]) + " o " + m_neg[-1]
+    elif m_neg:
+        t_m = m_neg[0]
+    else:
+        t_m = "*primera marca*"
     sugerencia = f"reparado completo placa disco con forros originales volante rectificado y balanceado con crapodina {t_m}"
 else:
     cat_f, icono, incl_rectif = "Venta", "🛠️", False
     sugerencia = "KIT de distribución"
 
-monto_limpio = st.sidebar.number_input("Precio de VENTA ($):", min_value=0, value=0)
+monto_limpio  = st.sidebar.number_input("Precio de VENTA ($):", min_value=0, value=0)
 vehiculo_input = st.sidebar.text_input("Vehículo:", "citroen c4 1.6")
-cliente_input = st.sidebar.text_input("Nombre del Cliente:", "Consumidor Final")
-
-detalle_excel = st.sidebar.text_input("📝 Detalle para Excel:", value="Reparación completa")
-detalle_final = st.sidebar.text_area("💬 Detalle en WhatsApp:", value=sugerencia)
+cliente_input  = st.sidebar.text_input("Nombre del Cliente:", "Consumidor Final")
+detalle_excel  = st.sidebar.text_input("📝 Detalle para Excel:", value="Reparación completa")
+detalle_final  = st.sidebar.text_area("💬 Detalle en WhatsApp:", value=sugerencia)
 
 st.sidebar.divider()
 st.sidebar.write("📸 **Uso Interno**")
@@ -238,72 +269,63 @@ foto_repuesto = st.sidebar.file_uploader("📷 Sacar foto a la caja/repuesto", t
 if foto_repuesto:
     st.sidebar.image(foto_repuesto, caption="Vista previa", use_container_width=True)
 
+ganancia = (monto_limpio - precio_compra) if monto_limpio > 0 else 0
 if monto_limpio > 0:
-    ganancia = monto_limpio - precio_compra
     st.sidebar.metric("Ganancia Estimada", f"$ {ganancia:,.0f}")
-else:
-    ganancia = 0
-    
+
 proveedor_input = st.sidebar.text_input("Proveedor:", "icepar")
 
 st.sidebar.divider()
 st.sidebar.subheader("💰 Estado de la Operación")
-        
-estado_cliente = st.sidebar.selectbox(
-    "Estado del Cliente:", 
-    ["Pagado", "Debe", "Seña"],
-    index=0
-)
-                
+
+estado_cliente = st.sidebar.selectbox("Estado del Cliente:", ["Pagado", "Debe", "Seña"], index=0)
+
 f_pago_input = "N/A"
 if estado_cliente == "Pagado":
     lista_pagos = [
-        "Efectivo", "Transferencia", "Débito", 
+        "Efectivo", "Transferencia", "Débito",
         "BNA - 1 Pago", "BNA - 3 Cuotas", "BNA - 6 Cuotas",
         "Getnet - 1 Pago", "Getnet - 3 Cuotas", "Getnet - 6 Cuotas",
         "Combinado", "Otro"
     ]
     f_pago_input = st.sidebar.selectbox("¿Cómo pagó el cliente?:", lista_pagos)
-        
-estado_p_prov = st.sidebar.selectbox(
-    "Estado al Proveedor:", 
-    ["Pagado", "Cuenta Corriente", "N/A"],
-    index=0
-)
+
+estado_p_prov = st.sidebar.selectbox("Estado al Proveedor:", ["Pagado", "Cuenta Corriente", "N/A"], index=0)
 
 if cat_f == "Reparación":
-    cod_kit_final = ""
+    cod_kit_final  = ""
     cod_crap_final = crap_codigo
 else:
-    cod_kit_final = codigo_manual
+    cod_kit_final  = codigo_manual
     cod_crap_final = ""
 
 if st.sidebar.button("💾 GUARDAR VENTA"):
-    guardar_en_google(cat_f, cliente_input, vehiculo_input, detalle_excel, monto_limpio, precio_compra, proveedor_input, cod_kit_final, cod_crap_final, f_pago_input, estado_cliente, estado_p_prov, m_forros, forros_codigo, forros_costo, ganancia)
-    
+    guardar_en_google(cat_f, cliente_input, vehiculo_input, detalle_excel,
+                      monto_limpio, precio_compra, proveedor_input,
+                      cod_kit_final, cod_crap_final, f_pago_input,
+                      estado_cliente, estado_p_prov,
+                      m_forros, forros_codigo, forros_costo, ganancia)
+
     if cod_kit_final:
-        if isinstance(m_kit, list) and len(m_kit) > 0:
-            marca_kit_final = m_kit[0]
-        else:
-            marca_kit_final = m_kit if m_kit else "OTRA"
+        marca_kit_final = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
         actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, monto_limpio, marca_kit_final)
-    
+
     if cod_crap_final:
         marca_elegida = m_crap[0] if m_crap else "OTRA"
         actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}", cod_crap_final, crap_costo, marca_elegida)
 
     st.sidebar.success(f"¡Venta de $ {monto_limpio:,.0f} guardada y catálogos actualizados!")
 
-# 3. CALCULADORA MULTI-POS Y QR
+# 3. CALCULADORA MULTI-POS
 st.markdown("### 💳 Calculadora de Cuotas")
 tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET (18 días)", "MÁS PAGOS (18 días)"], horizontal=True)
 
 if "GETNET" in tipo_pos:
     c1, c3, c6 = GETNET_1, GETNET_3, GETNET_6
-    nombre_pos = "GETNET"
+    nombre_pos  = "GETNET"
 else:
     c1, c3, c6 = MASPAGOS_1, MASPAGOS_3, MASPAGOS_6
-    nombre_pos = "MÁS PAGOS"
+    nombre_pos  = "MÁS PAGOS"
 
 t1 = monto_limpio * c1
 t3 = monto_limpio * c3
@@ -314,7 +336,8 @@ st.info(f"📊 **Recargos Reales:** 1 Pago: {p_1:.1f}% | 3 Cuotas: {p_3:.1f}% | 
 
 st.divider()
 st.markdown(f"""
-    <div style='background-color: #d4edda; padding: 10px; border-radius: 5px; text-align: center; border: 2px solid #28a745;'>
+    <div style='background-color: #d4edda; padding: 10px; border-radius: 5px;
+                text-align: center; border: 2px solid #28a745;'>
         <h2 style='color: #155724; margin:0;'>💰 CONTADO / TRANSF: $ {monto_limpio:,.0f}</h2>
         <p style='margin:0; font-size: 0.9em;'>(Este monto te queda limpio)</p>
     </div>
@@ -322,19 +345,13 @@ st.markdown(f"""
 
 st.write(f"**Precios de Lista con {nombre_pos}:**")
 col_a, col_b, col_c = st.columns(3)
-with col_a: st.metric("1 PAGO", f"$ {t1:,.0f}")
-with col_b: st.metric("3 CUOTAS", f"$ {t3/3:,.2f}", f"Total: ${t3:,.0f}")
-with col_c: st.metric("6 CUOTAS", f"$ {t6/6:,.2f}", f"Total: ${t6:,.0f}")
+with col_a: st.metric("1 PAGO",    f"$ {t1:,.0f}")
+with col_b: st.metric("3 CUOTAS",  f"$ {t3/3:,.2f}", f"Total: ${t3:,.0f}")
+with col_c: st.metric("6 CUOTAS",  f"$ {t6/6:,.2f}", f"Total: ${t6:,.0f}")
 
 # 4. WHATSAPP
-if incl_rectif:
-    txt_rectif = "\n✅ *Incluye rectificación y balanceo de volante*"
-else:
-    txt_rectif = ""
-
-maps_link = "https://www.google.com/maps?q=Crespo+4117+Rosario"
-ig_link = "https://www.instagram.com/embraguesrosario?igsh=MWsxNzI1MTN4ZWJ3eg=="
-metodo_txt = f"{nombre_pos} (Físico o QR)"
+txt_rectif = "\n✅ *Incluye rectificación y balanceo de volante*" if incl_rectif else ""
+maps_link  = "https://www.google.com/maps?q=Crespo+4117+Rosario"
 
 mensaje = (
     f"🚗 *EMBRAGUES ROSARIO*\n"
@@ -363,46 +380,34 @@ st.link_button("🟢 ENVIAR PRESUPUESTO POR WHATSAPP", link_wa)
 st.divider()
 st.subheader("📋 Últimos Movimientos")
 try:
-    df_ver = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=600)
+    df_ver = leer_hoja(SHEET_URL, "Ventas")
     if not df_ver.empty:
         st.dataframe(df_ver.tail(5)[::-1], use_container_width=True)
     else:
         st.info("La planilla está vacía todavía.")
 except Exception as e:
-    st.info("Conectando con Google Sheets...")
+    st.warning("⚠️ No se pudo cargar el historial.")
 
-# ==========================================
-# 🔍 SECCIÓN: BUSCADOR DE CATÁLOGO
-# ==========================================
+# 6. BUSCADOR DE CATÁLOGO
 st.divider()
 st.header("🔍 Consultar Catálogo")
 
-tipo_busqueda = st.radio("¿Qué estás buscando?", ["Embragues (Kits)", "Crapodinas", "Distribución"], horizontal=True)
+tipo_busqueda = st.radio("¿Qué estás buscando?",
+                         ["Embragues (Kits)", "Crapodinas", "Distribución"],
+                         horizontal=True)
 busqueda = st.text_input("✍️ Escribí Modelo de Auto o Código (Ej: 'Gol', '620 3000', 'Ranger'):")
 
 if busqueda:
     st.caption(f"Resultados para: '{busqueda}'")
-    
     if tipo_busqueda == "Embragues (Kits)":
         mask = df_kits.astype(str).apply(lambda x: x.str.contains(busqueda, case=False, na=False)).any(axis=1)
         resultados = df_kits[mask]
-        if not resultados.empty:
-            st.dataframe(resultados, hide_index=True)
-        else:
-            st.info("No encontré kits con ese dato. ¿Probaste otra palabra?")
-            
+        st.dataframe(resultados, hide_index=True) if not resultados.empty else st.info("No encontré kits con ese dato. ¿Probaste otra palabra?")
     elif tipo_busqueda == "Crapodinas":
         mask = df_crapo.astype(str).apply(lambda x: x.str.contains(busqueda, case=False, na=False)).any(axis=1)
         resultados = df_crapo[mask]
-        if not resultados.empty:
-            st.dataframe(resultados, hide_index=True)
-        else:
-            st.info("No encontré crapodinas así.")
-            
+        st.dataframe(resultados, hide_index=True) if not resultados.empty else st.info("No encontré crapodinas así.")
     elif tipo_busqueda == "Distribución":
         mask = df_distri.astype(str).apply(lambda x: x.str.contains(busqueda, case=False, na=False)).any(axis=1)
         resultados = df_distri[mask]
-        if not resultados.empty:
-            st.dataframe(resultados, hide_index=True)
-        else:
-            st.info("Nada en Distribución todavía.")
+        st.dataframe(resultados, hide_index=True) if not resultados.empty else st.info("Nada en Distribución todavía.")
