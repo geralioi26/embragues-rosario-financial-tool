@@ -100,7 +100,7 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
         conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", data=df)
         leer_hoja.clear()
     except Exception as e:
-        st.error(f"Error real en kits: {e}") # <-- CAMBIAR EL 'pass' POR ESTO
+        st.error(f"Error real en kits: {e}")
 
 def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca):
     try:
