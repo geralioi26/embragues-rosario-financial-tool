@@ -147,7 +147,7 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
         conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", data=df)
         leer_hoja.clear()
     except Exception as e:
-        pass
+        st.error(f"Error real en crapodinas: {e}")
 
 def guardar_en_google(categoria, cliente, vehiculo, detalle, monto_bruto, monto_neto, costo, proveedor,
                       cod_kit, cod_crap, f_pago, e_cliente, e_prov,
