@@ -155,12 +155,14 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
     except Exception as e:
         st.error(f"Error en crapodinas: {e}")
 
-def guardar_en_google(categoria, cliente, vehiculo, detalle, monto, costo, proveedor,
+def guardar_en_google(categoria, cliente, vehiculo, detalle, monto_bruto, monto_neto, costo, proveedor,
                       cod_kit, cod_crap, f_pago, e_cliente, e_prov,
                       m_forros, c_forros, costo_f, ganancia):
     fecha_hoy = (datetime.now() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
+    
+    # SE AGREGA LA COLUMNA PARA AUDITORÍA BANCARIA: "Monto Neto Esperado"
     columnas = ["Fecha","Categoría","Cliente","Vehículo","Detalle",
-                "Venta $","Compra $","Proveedor","Código","Cod_Crapodina",
+                "Venta $", "Monto Neto Esperado", "Compra $","Proveedor","Código","Cod_Crapodina",
                 "Forma_de_pago","Estado_Cobro","Estado_Pago_Prov",
                 "Marca_Forros","Cod_Forros","Costo_Forros","Ganancia"]
     try:
@@ -170,7 +172,7 @@ def guardar_en_google(categoria, cliente, vehiculo, detalle, monto, costo, prove
         st.stop()
         
     nueva = pd.DataFrame([[fecha_hoy, categoria, cliente, vehiculo, detalle,
-                           monto, costo, proveedor, cod_kit, cod_crap,
+                           monto_bruto, monto_neto, costo, proveedor, cod_kit, cod_crap,
                            f_pago, e_cliente, e_prov,
                            m_forros, c_forros, costo_f, ganancia]],
                          columns=columnas)
@@ -180,6 +182,11 @@ def guardar_en_google(categoria, cliente, vehiculo, detalle, monto, costo, prove
 
 # 7. SIDEBAR — FORMULARIO
 st.sidebar.header("⚙️ Configuración")
+
+# MENSAJE DE ÉXITO LUEGO DEL RERUN (LIMPIEZA DE FORMULARIO)
+if "venta_exitosa" in st.session_state:
+    st.sidebar.success(st.session_state["venta_exitosa"])
+    del st.session_state["venta_exitosa"]
 
 # Inicialización defensiva
 m_kit = m_forros = forros_codigo = crap_codigo = tipo_crap = ""
@@ -243,10 +250,12 @@ st.sidebar.subheader("💰 Estado de la Operación")
 estado_cliente = st.sidebar.selectbox("Estado del Cliente:", ["Pagado","Debe","Seña"], index=0)
 f_pago_input = "N/A"
 if estado_cliente == "Pagado":
+    # MENÚ CON BNA RESTITUIDO
     f_pago_input = st.sidebar.selectbox("¿Cómo pagó?:", [
         "Efectivo","Transferencia","Débito",
         "BNA - 1 Pago","BNA - 3 Cuotas","BNA - 6 Cuotas",
         "Getnet - 1 Pago","Getnet - 3 Cuotas","Getnet - 6 Cuotas",
+        "Más Pagos - 1 Pago","Más Pagos - 3 Cuotas","Más Pagos - 6 Cuotas",
         "Combinado","Otro"])
 
 estado_p_prov = st.sidebar.selectbox("Estado al Proveedor:", ["Pagado","Cuenta Corriente","N/A"], index=0)
@@ -255,11 +264,21 @@ cod_kit_final = "" if cat_f == "Reparación" else codigo_manual
 cod_crap_final = crap_codigo if cat_f == "Reparación" else ""
 
 if st.sidebar.button("💾 GUARDAR VENTA"):
+    # MOTOR DE CÁLCULO FINANCIERO CRÍTICO
+    monto_bruto = monto_limpio
+    if f_pago_input == "Getnet - 1 Pago": monto_bruto = monto_limpio * GETNET_1
+    elif f_pago_input == "Getnet - 3 Cuotas": monto_bruto = monto_limpio * GETNET_3
+    elif f_pago_input == "Getnet - 6 Cuotas": monto_bruto = monto_limpio * GETNET_6
+    elif f_pago_input == "Más Pagos - 1 Pago": monto_bruto = monto_limpio * MPAGOS_1
+    elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = monto_limpio * MPAGOS_3
+    elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = monto_limpio * MPAGOS_6
+    
     guardar_en_google(cat_f, cliente_input, vehiculo_input, detalle_excel,
-                      monto_limpio, precio_compra, proveedor_input,
+                      monto_bruto, monto_limpio, precio_compra, proveedor_input,
                       cod_kit_final, cod_crap_final, f_pago_input,
                       estado_cliente, estado_p_prov,
                       m_forros, forros_codigo, forros_costo, ganancia)
+                      
     if cod_kit_final:
         marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
         actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, monto_limpio, marca_k)
@@ -267,11 +286,15 @@ if st.sidebar.button("💾 GUARDAR VENTA"):
         actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}",
                                        cod_crap_final, crap_costo,
                                        m_crap[0] if m_crap else "OTRA")
-    st.sidebar.success(f"✅ Venta de ${monto_limpio:,.0f} guardada!")
+                                       
+    # GUARDAR ESTADO EXITOSO Y REINICIAR (RERUN) PARA LIMPIAR EL FORMULARIO
+    st.session_state["venta_exitosa"] = f"✅ Venta registrada: Neto esperado de ${monto_limpio:,.0f} (Bruto facturado: ${monto_bruto:,.0f})."
+    st.rerun()
 
 # 8. CALCULADORA DE CUOTAS
 st.markdown("### 💳 Calculadora de Cuotas")
-tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET (18 días)", "MÁS PAGOS (18 días)"], horizontal=True)
+# TEXTOS UI CORREGIDOS
+tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET", "MÁS PAGOS"], horizontal=True)
 
 if "GETNET" in tipo_pos:
     c1, c3, c6 = GETNET_1, GETNET_3, GETNET_6
