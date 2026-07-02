@@ -58,7 +58,6 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
     try:
         df = leer_fresca(SHEET_URL, "Catalogo_Kits")
         
-        # BLINDAJE
         if 'Vehiculo' not in df.columns: df['Vehiculo'] = ""
         if 'Descripcion' not in df.columns: df['Descripcion'] = ""
         
@@ -174,7 +173,6 @@ def guardar_en_google(categoria, cliente, vehiculo, detalle, monto_bruto, monto_
     leer_hoja.clear()
 
 # -------------------------------------------------------------
-# SISTEMA DE LIMPIEZA BLINDADA (LLAVES DINÁMICAS)
 if "form_key" not in st.session_state:
     st.session_state.form_key = 0
 fk = st.session_state.form_key
@@ -261,7 +259,6 @@ cod_crap_final = crap_codigo if cat_f == "Reparación" else ""
 
 if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     
-    # MOTOR DE CÁLCULO FINANCIERO CRÍTICO Y LÓGICA DE AUDITORÍA
     monto_bruto = monto_limpio
     monto_neto_guardar = monto_limpio
     
@@ -294,7 +291,7 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
 
 # 8. CALCULADORA DE CUOTAS
 st.markdown("### 💳 Calculadora de Cuotas")
-tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET", "MÁS PAGOS"], horizontal=True)
+tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET (18 días)", "MÁS PAGOS (18 días)"], horizontal=True)
 
 if "GETNET" in tipo_pos:
     c1, c3, c6 = GETNET_1, GETNET_3, GETNET_6
