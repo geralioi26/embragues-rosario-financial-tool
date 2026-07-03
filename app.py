@@ -30,19 +30,33 @@ def leer_hoja(url, hoja):
 def leer_fresca(url, hoja):
     return conn.read(spreadsheet=url, worksheet=hoja, ttl=0)
 
-# 4. COEFICIENTES DESDE SHEETS
+# 4. COEFICIENTES DESDE SHEETS (SEGURIDAD FINANCIERA ESTRICTA)
 try:
     df_cfg = leer_hoja(SHEET_URL, "Configuracion")
+    
+    # BLINDAJE 1: Limpiamos espacios invisibles al principio o final de las palabras
+    df_cfg["Parametro"] = df_cfg["Parametro"].astype(str).str.strip()
     cfg = dict(zip(df_cfg["Parametro"], df_cfg["Valor"]))
     
-    GETNET_1 = float(cfg["GETNET_1_PAGO"])
-    GETNET_3 = float(cfg["GETNET_3_CUOTAS"])
-    GETNET_6 = float(cfg["GETNET_6_CUOTAS"])
-    MPAGOS_1 = float(cfg["MASPAGOS_1_PAGO"])
-    MPAGOS_3 = float(cfg["MASPAGOS_3_CUOTAS"])
-    MPAGOS_6 = float(cfg["MASPAGOS_6_CUOTAS"])
+    # BLINDAJE 2: Convertimos a la fuerza cualquier coma en punto para que la matemática no falle
+    def a_numero(valor):
+        return float(str(valor).replace(",", ".").strip())
+    
+    # Exigimos la lectura directa y limpia
+    GETNET_1 = a_numero(cfg["GETNET_1_PAGO"])
+    GETNET_3 = a_numero(cfg["GETNET_3_CUOTAS"])
+    GETNET_6 = a_numero(cfg["GETNET_6_CUOTAS"])
+    MPAGOS_1 = a_numero(cfg["MASPAGOS_1_PAGO"])
+    MPAGOS_3 = a_numero(cfg["MASPAGOS_3_CUOTAS"])
+    MPAGOS_6 = a_numero(cfg["MASPAGOS_6_CUOTAS"])
+
 except Exception as e:
-    st.error("🚨 ERROR CRÍTICO: No se pudieron leer las tasas de financiación.")
+    st.error(f"🚨 ERROR TÉCNICO DETALLADO: {e}")
+    st.error("Verificá la tabla de abajo. Así es exactamente como la aplicación está leyendo tu Excel. Si falta algún dato, ahí está la fuga.")
+    try:
+        st.dataframe(df_cfg) # Le pedimos que nos muestre en pantalla qué fue lo que leyó
+    except:
+        pass
     st.stop()
 
 # 5. CATÁLOGOS
