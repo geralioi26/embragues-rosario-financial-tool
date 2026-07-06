@@ -68,12 +68,13 @@ except Exception as e:
     df_kits = df_crapo = df_distri = pd.DataFrame()
 
 # 6. FUNCIONES DE ESCRITURA
+
 def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
     try:
         df = leer_fresca(SHEET_URL, "Catalogo_Kits")
         
+        # BLINDAJE: Adaptado exactamente a las columnas de tu Excel
         if 'Vehiculo' not in df.columns: df['Vehiculo'] = ""
-        if 'Descripcion' not in df.columns: df['Descripcion'] = ""
         
         marca_up = str(marca).upper()
         col_cod = f"Codigo_{marca_up}"
@@ -84,28 +85,17 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
             df[col_pre] = ""
 
         veh_l = str(vehiculo).strip().lower()
-        desc_l = str(descripcion).strip().lower()
         cod_l = str(codigo).split('.')[0].strip()
         
-        m_exacto = (df['Vehiculo'].astype(str).str.strip().str.lower() == veh_l) & \
-                   (df['Descripcion'].astype(str).str.strip().str.lower() == desc_l)
-        
-        m_cod = df[col_cod].astype(str).str.split('.').str[0].str.strip() == cod_l if not df[col_cod].isna().all() else pd.Series([False]*len(df))
+        m_exacto = (df['Vehiculo'].astype(str).str.strip().str.lower() == veh_l)
         
         if m_exacto.any():
             idx = df.index[m_exacto][0]
             df.at[idx, col_cod] = codigo
             df.at[idx, col_pre] = precio
-        elif m_cod.any():
-            idx = df.index[m_cod][0]
-            v_a = str(df.at[idx,'Vehiculo'])
-            if veh_l not in v_a.lower():
-                df.at[idx,'Vehiculo'] = f"{v_a} / {vehiculo}"
-            df.at[idx, col_pre] = precio
         else:
             fila = {c: "" for c in df.columns}
             fila["Vehiculo"] = vehiculo
-            fila["Descripcion"] = descripcion
             fila[col_cod] = codigo
             fila[col_pre] = precio
             df = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
@@ -113,7 +103,7 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
         conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", data=df)
         leer_hoja.clear()
     except Exception as e:
-        st.error(f"Error real en kits: {e}")
+        st.error(f"Falla al guardar en Kits: {e}")
 
 def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca):
     try:
@@ -132,22 +122,13 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
 
         veh_l = str(vehiculo).strip().lower()
         desc_l = str(descripcion).strip().lower()
-        cod_l = str(codigo).split('.')[0].strip()
         
         m_exacto = (df['Vehiculo'].astype(str).str.strip().str.lower() == veh_l) & \
                    (df['Descripcion'].astype(str).str.strip().str.lower() == desc_l)
                    
-        m_cod = df[col_cod].astype(str).str.split('.').str[0].str.strip() == cod_l if not df[col_cod].isna().all() else pd.Series([False]*len(df))
-        
         if m_exacto.any():
             idx = df.index[m_exacto][0]
             df.at[idx, col_cod] = codigo
-            df.at[idx, col_pre] = precio
-        elif m_cod.any():
-            idx = df.index[m_cod][0]
-            v_a = str(df.at[idx,'Vehiculo'])
-            if veh_l not in v_a.lower():
-                df.at[idx,'Vehiculo'] = f"{v_a} / {vehiculo}"
             df.at[idx, col_pre] = precio
         else:
             fila = {c: "" for c in df.columns}
@@ -160,7 +141,7 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
         conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", data=df)
         leer_hoja.clear()
     except Exception as e:
-        st.error(f"Error real en crapodinas: {e}")
+        st.error(f"Falla al guardar en Crapodinas: {e}")
 
 def guardar_en_google(categoria, cliente, vehiculo, detalle, monto_bruto, monto_neto, costo, proveedor,
                       cod_kit, cod_crap, f_pago, e_cliente, e_prov,
