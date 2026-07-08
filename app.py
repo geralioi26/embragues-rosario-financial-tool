@@ -286,7 +286,7 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
 
 # 8. CALCULADORA DE CUOTAS
 st.markdown("### 💳 Calculadora de Cuotas")
-tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET (18 días)", "MÁS PAGOS (18 días)"], horizontal=True)
+tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET (1 Pago: 8 días | Cuotas: 18 días)", "MÁS PAGOS (18 días)"], horizontal=True)
 
 if "GETNET" in tipo_pos:
     c1, c3, c6 = GETNET_1, GETNET_3, GETNET_6
