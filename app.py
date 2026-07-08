@@ -69,6 +69,32 @@ except Exception as e:
 
 # 6. FUNCIONES DE ESCRITURA
 
+def saldar_deuda(fecha, nombre, tipo_actor):
+    try:
+        df = leer_fresca(SHEET_URL, "Ventas")
+        
+        # Filtramos para asegurarnos de no agarrar filas vacías
+        if tipo_actor == "Cliente":
+            mask = (df['Fecha'].astype(str).str.strip() == str(fecha).strip()) & (df['Cliente'].astype(str).str.strip() == str(nombre).strip())
+            if mask.any():
+                idx = df.index[mask][0]
+                df.at[idx, 'Estado_Cobro'] = "Pagado"
+                
+        elif tipo_actor == "Proveedor":
+            mask = (df['Fecha'].astype(str).str.strip() == str(fecha).strip()) & (df['Proveedor'].astype(str).str.strip() == str(nombre).strip())
+            if mask.any():
+                idx = df.index[mask][0]
+                df.at[idx, 'Estado_Pago_Prov'] = "Pagado"
+                
+        # Guardamos en el Excel y limpiamos la memoria
+        conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df)
+        st.cache_data.clear()
+        return True
+        
+    except Exception as e:
+        st.error(f"Falla al saldar deuda: {e}")
+        return False
+
 def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca, motor, proveedor):
     try:
         df = leer_fresca(SHEET_URL, "Catalogo_Kits")
