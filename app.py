@@ -366,6 +366,9 @@ if busqueda:
     if not df_b.empty:
         mask = df_b.astype(str).apply(lambda x: x.str.contains(busqueda, case=False, na=False)).any(axis=1)
         res = df_b[mask]
-        st.dataframe(res, hide_index=True) if not res.empty else st.info("No encontré nada con ese dato.")
-    else:
+        if not res.empty:
+            st.dataframe(res, hide_index=True)
+        else:
+            st.info("No encontré nada con ese dato.")
+        
         st.info("Catálogo vacío todavía.")
