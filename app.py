@@ -89,20 +89,20 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca, motor
         
         m_exacto = (df['Vehiculo'].astype(str).str.strip().str.lower() == veh_l)
         
-    if m_exacto.any():
-        idx = df.index[m_exacto][0]
-        df.at[idx, col_cod] = codigo
-        df.at[idx, col_pre] = precio
-        if motor: df.at[idx, "Motor"] = motor
-        if proveedor: df.at[idx, "Proveedor"] = proveedor
-    else:
-        fila = {c: "" for c in df.columns}
-        fila["Vehiculo"] = vehiculo
-        fila["Motor"] = motor
-        fila["Proveedor"] = proveedor
-        fila[col_cod] = codigo
-        fila[col_pre] = precio
-        df = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
+     if m_exacto.any():
+            idx = df.index[m_exacto][0]
+            df.at[idx, col_cod] = codigo
+            df.at[idx, col_pre] = precio
+            if motor: df.at[idx, "Motor"] = motor
+            if proveedor: df.at[idx, "Proveedor"] = proveedor
+        else:
+            fila = {c: "" for c in df.columns}
+            fila["Vehiculo"] = vehiculo
+            fila["Motor"] = motor
+            fila["Proveedor"] = proveedor
+            fila[col_cod] = codigo
+            fila[col_pre] = precio
+            df = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
             
         conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", data=df)
         leer_hoja.clear()
