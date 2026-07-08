@@ -28,7 +28,7 @@ def leer_hoja(url, hoja):
     return conn.read(spreadsheet=url, worksheet=hoja)
 
 def leer_fresca(url, hoja):
-    return conn.read(spreadsheet=url, worksheet=hoja, ttl=0)
+    return conn.read(spreadsheet=url, worksheet=hoja, ttl=900)
 
 # 4. COEFICIENTES DESDE SHEETS (SEGURIDAD FINANCIERA ESTRICTA)
 try:
@@ -287,7 +287,8 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
                                        m_crap[0] if m_crap else "OTRA")
                                        
     st.session_state.form_key += 1
-    st.session_state["venta_exitosa"] = f"✅ Venta registrada correctamente."
+    st.session_state["venta_exitosa"] = "✅ Venta registrada correctamente."
+    st.cache_data.clear()
     st.rerun()
 
 # 8. CALCULADORA DE CUOTAS
