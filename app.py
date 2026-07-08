@@ -89,7 +89,7 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca, motor
         
         m_exacto = (df['Vehiculo'].astype(str).str.strip().str.lower() == veh_l)
         
-     if m_exacto.any():
+        if m_exacto.any():
             idx = df.index[m_exacto][0]
             df.at[idx, col_cod] = codigo
             df.at[idx, col_pre] = precio
