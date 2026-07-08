@@ -274,7 +274,7 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
                       
     if cod_kit_final:
         marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
-        actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, monto_limpio, marca_k)
+        actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, precio_compra, marca_k)
     if cod_crap_final:
         actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}",
                                        cod_crap_final, crap_costo,
