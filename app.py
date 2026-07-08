@@ -419,7 +419,7 @@ try:
         df_deudas = df_ventas[df_ventas['Estado_Cobro'].astype(str).str.strip().str.lower() == "cuenta corriente"]
         
         if not df_deudas.empty:
-            opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehiculo'].astype(str)
+            opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
             seleccion = st.selectbox("Seleccioná la deuda a cobrar:", opciones.tolist())
             
             if st.button("💰 Registrar Cobro"):
@@ -436,7 +436,7 @@ try:
         df_deudas = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"]
         
         if not df_deudas.empty:
-            opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Proveedor'].astype(str) + " | " + df_deudas['Vehiculo'].astype(str)
+            opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Proveedor'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
             seleccion = st.selectbox("Seleccioná la deuda a pagar:", opciones.tolist())
             
             if st.button("💸 Registrar Pago"):
