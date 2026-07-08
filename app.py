@@ -69,7 +69,7 @@ except Exception as e:
 
 # 6. FUNCIONES DE ESCRITURA
 
-def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
+def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca, motor, proveedor):
     try:
         df = leer_fresca(SHEET_URL, "Catalogo_Kits")
         
@@ -90,15 +90,19 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca):
         m_exacto = (df['Vehiculo'].astype(str).str.strip().str.lower() == veh_l)
         
         if m_exacto.any():
-            idx = df.index[m_exacto][0]
-            df.at[idx, col_cod] = codigo
-            df.at[idx, col_pre] = precio
-        else:
-            fila = {c: "" for c in df.columns}
-            fila["Vehiculo"] = vehiculo
-            fila[col_cod] = codigo
-            fila[col_pre] = precio
-            df = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
+        idx = df.index[m_exacto][0]
+        df.at[idx, col_cod] = codigo
+        df.at[idx, col_pre] = precio
+        if motor: df.at[idx, "Motor"] = motor
+        if proveedor: df.at[idx, "Proveedor"] = proveedor
+    else:
+        fila = {c: "" for c in df.columns}
+        fila["Vehiculo"] = vehiculo
+        fila["Motor"] = motor
+        fila["Proveedor"] = proveedor
+        fila[col_cod] = codigo
+        fila[col_pre] = precio
+        df = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
             
         conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", data=df)
         leer_hoja.clear()
@@ -209,6 +213,8 @@ else:
 
 monto_limpio = st.sidebar.number_input("Precio de VENTA ($):", min_value=0, value=0, key=f"montolimpio_{fk}")
 vehiculo_input = st.sidebar.text_input("Vehículo:", value="", key=f"vehiculo_{fk}")
+motor_input = st.sidebar.text_input("Motor:", value="", key=f"motor_{fk}")
+proveedor_input = st.sidebar.text_input("Proveedor:", value="", key=f"proveedor_{fk}")
 cliente_input = st.sidebar.text_input("Nombre del Cliente:", value="", key=f"cliente_{fk}")
 detalle_excel = st.sidebar.text_input("📝 Detalle para Excel:", value="Venta / Reparación", key=f"detalle_{fk}")
 detalle_final = st.sidebar.text_area("💬 Detalle en WhatsApp:", value=sugerencia, key=f"detwhats_{fk}")
@@ -274,7 +280,7 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
                       
     if cod_kit_final:
         marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
-        actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, precio_compra, marca_k)
+       actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, precio_compra, marca_k, motor_input, proveedor_input)
     if cod_crap_final:
         actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}",
                                        cod_crap_final, crap_costo,
