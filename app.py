@@ -28,9 +28,16 @@ def leer_hoja(url, hoja):
     return conn.read(spreadsheet=url, worksheet=hoja)
 
 def leer_fresca(url, hoja):
-    df = conn.read(spreadsheet=url, worksheet=hoja, ttl=900)
-    df_limpio = df.dropna(how='all').copy()
-    return df_limpio
+    # 1. Leemos el Excel y hacemos una copia segura en la RAM
+    df = conn.read(spreadsheet=url, worksheet=hoja, ttl=900).copy()
+    
+    # 2. Forzamos a que las celdas vacías falsas de Excel sean verdaderos nulos
+    df = df.replace(["", " ", "None"], None)
+    
+    # 3. Ahora sí, volamos la grasa y dejamos solo los repuestos reales
+    df = df.dropna(how='all')
+    
+    return df
 # 4. COEFICIENTES DESDE SHEETS (SEGURIDAD FINANCIERA ESTRICTA)
 try:
     df_cfg = leer_hoja(SHEET_URL, "Configuracion")
