@@ -34,9 +34,8 @@ def leer_fresca(url, hoja):
     # 2. Forzamos a que las celdas vacías falsas de Excel sean verdaderos nulos
     df = df.replace(["", " ", "None"], None)
     
-    # 3. Aspiradora de doble motor: volamos COLUMNAS fantasma y después FILAS fantasma
-    df = df.dropna(axis=1, how='all')
-    df = df.dropna(axis=0, how='all')
+    # 3. Ahora sí, volamos la grasa y dejamos solo los repuestos reales
+    df = df.dropna(how='all')
     
     return df
 # 4. COEFICIENTES DESDE SHEETS (SEGURIDAD FINANCIERA ESTRICTA)
