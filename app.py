@@ -15,12 +15,12 @@ st.markdown("Crespo 4117, Rosario | **IIBB: EXENTO**")
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1YJHJ006kr-izLHG9Ib5CRUX5VUdu6INRDsKn4u0x32Y/edit"
 
-# 2. CONEXIÓN
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-except Exception as e:
-    st.error(f"Error de conexión: {e}")
-    st.stop()
+# 2. CONEXIÓN (Estructura a prueba de errores)
+@st.cache_resource
+def get_conn():
+    return st.connection("gsheets", type=GSheetsConnection)
+
+conn = get_conn()
 
 # 3. CACHÉ
 @st.cache_data(ttl=600, show_spinner=False)
@@ -389,32 +389,30 @@ try:
 except Exception:
     st.warning("⚠️ No se pudo cargar el historial.")
 
-# 11. BUSCADOR DE CATÁLOGO
+# 11. BUSCADOR DE CATÁLOGO (Optimizado para no usar RAM)
 st.divider()
 st.header("🔍 Consultar Catálogo")
 tipo_busqueda = st.radio("¿Qué estás buscando?", ["Embragues (Kits)","Crapodinas","Distribución"], horizontal=True)
-
 busqueda = st.text_input("✍️ Modelo de Auto o Código:")
 
+# Si no hay búsqueda, no hacemos nada
 if busqueda:
     hoja_map = {"Embragues (Kits)": "Catalogo_Kits", "Crapodinas": "Catalogo_Crapodinas", "Distribución": "Catalogo_Distribucion"}
-    # Usamos leer_hoja (que ya tenés definida y cacheada en tu línea 26)
-    df_b = leer_hoja(SHEET_URL, hoja_map[tipo_busqueda])
     
-    if not df_b.empty:
-        palabras = busqueda.lower().split()
-        mask = pd.Series(True, index=df_b.index)
+    # Cargamos los datos solo si no están en memoria
+    if 'df_b' not in st.session_state:
+        st.session_state.df_b = leer_hoja(SHEET_URL, hoja_map[tipo_busqueda])
+    
+    df_b = st.session_state.df_b
+    
+    palabras = busqueda.lower().split()
+    mask = pd.Series(True, index=df_b.index)
+    for palabra in palabras:
+        mask &= df_b.fillna("").astype(str).apply(lambda x: x.str.contains(palabra, case=False, na=False)).any(axis=1)
         
-        for palabra in palabras:
-            mask &= df_b.fillna("").astype(str).apply(
-                lambda x: x.str.contains(palabra, case=False, na=False)
-            ).any(axis=1)
-            
-        df_filtrado = df_b[mask]
-        
-        if not df_filtrado.empty:
-            st.dataframe(df_filtrado, use_container_width=True)
-        else:
-            st.info("No encontré resultados.")
+    df_filtrado = df_b[mask]
+    
+    if not df_filtrado.empty:
+        st.dataframe(df_filtrado, use_container_width=True)
     else:
-        st.warning("La base de datos está vacía.")
+        st.info("No encontré resultados.")
