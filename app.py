@@ -407,10 +407,13 @@ if busqueda:
         else:
             df_b = df_distri
             
-        # 2. Aplicamos el motor de búsqueda cruzada
+        # 2. Motor de búsqueda cruzada blindado
         if not df_b.empty:
             palabras = busqueda.lower().split()
-            mascara = df_b.astype(str).apply(lambda fila: all(p in ' '.join(fila).lower() for p in palabras), axis=1)
+            
+            # Forzamos todo a texto plano y unimos la fila completa para que no salten errores de formato
+            texto_filas = df_b.fillna("").astype(str).apply(lambda fila: ' '.join(fila.values).lower(), axis=1)
+            mascara = texto_filas.apply(lambda texto: all(p in texto for p in palabras))
             df_filtrado = df_b[mascara]
             
             if not df_filtrado.empty:
