@@ -405,22 +405,20 @@ if busqueda:
     else:
         df_b = df_distri
     if not df_b.empty:
-        # 1. Rompemos tu búsqueda en palabras sueltas (ej: "corsa" y "1.6")
-        palabras = busqueda.lower().split()
+            # 1. Rompemos tu búsqueda en palabras sueltas (ej: "corsa" y "1.6")
+            palabras = busqueda.lower().split()
             
-        # 2. Escaneamos la fila completa y verificamos que TODAS las palabras estén presentes
-        mascara = df_b.astype(str).apply(lambda fila: all(p in ' '.join(fila).lower() for p in palabras), axis=1)
-        df_filtrado = df_b[mascara]
+            # 2. Escaneamos la fila completa y verificamos que TODAS las palabras estén presentes
+            mascara = df_b.astype(str).apply(lambda fila: all(p in ' '.join(fila).lower() for p in palabras), axis=1)
+            df_filtrado = df_b[mascara]
             
-        # 3. Mostramos el resultado limpio y volamos carteles molestos
-        if not df_filtrado.empty:
-            st.dataframe(df_filtrado, use_container_width=True)
+            # 3. Mostramos el resultado limpio y volamos carteles molestos
+            if not df_filtrado.empty:
+                st.dataframe(df_filtrado, use_container_width=True)
+            else:
+                st.info("No encontré repuestos con esa combinación.")
         else:
-            st.info("No encontré repuestos con esa combinación.")
-      else:
-          st.warning("La base de datos no tiene datos cargados.")
-        
-        st.info("Catálogo vacío todavía.")
+            st.warning("La base de datos no tiene datos cargados.")
 # 9. GESTIÓN DE SALDOS (CUENTAS CORRIENTES)
 st.markdown("---")
 st.markdown("### 📒 Gestión de Cuentas Corrientes")
