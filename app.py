@@ -28,8 +28,9 @@ def leer_hoja(url, hoja):
     return conn.read(spreadsheet=url, worksheet=hoja)
 
 def leer_fresca(url, hoja):
-    return conn.read(spreadsheet=url, worksheet=hoja, ttl=900)
-
+    df = conn.read(spreadsheet=url, worksheet=hoja, ttl=900)
+    df_limpio = df.dropna(how='all').copy()
+    return df_limpio
 # 4. COEFICIENTES DESDE SHEETS (SEGURIDAD FINANCIERA ESTRICTA)
 try:
     df_cfg = leer_hoja(SHEET_URL, "Configuracion")
