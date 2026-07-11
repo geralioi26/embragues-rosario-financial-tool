@@ -398,7 +398,8 @@ busqueda = st.text_input("✍️ Modelo de Auto o Código:")
 
 if busqueda:
     hoja_map = {"Embragues (Kits)": "Catalogo_Kits", "Crapodinas": "Catalogo_Crapodinas", "Distribución": "Catalogo_Distribucion"}
-    df_b = leer_hoja_cached(hoja_map[tipo_busqueda])
+    # Usamos leer_hoja (que ya tenés definida y cacheada en tu línea 26)
+    df_b = leer_hoja(SHEET_URL, hoja_map[tipo_busqueda])
     
     if not df_b.empty:
         palabras = busqueda.lower().split()
