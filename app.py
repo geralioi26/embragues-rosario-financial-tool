@@ -462,5 +462,5 @@ if busqueda:
             #else:
                 #st.info("No tenés cuentas corrientes pendientes con proveedores.")
 
-    except Exception as e:
-        st.error(f"Error al cargar las cuentas corrientes: {e}")
+    #except Exception as e:
+        #st.error(f"Error al cargar las cuentas corrientes: {e}")
