@@ -392,36 +392,31 @@ except Exception:
 # 11. BUSCADOR DE CATÁLOGO
 st.divider()
 st.header("🔍 Consultar Catálogo")
-tipo_busqueda = st.radio("¿Qué estás buscando?",
-                         ["Embragues (Kits)","Crapodinas","Distribución"], horizontal=True)
-busqueda = st.text_input("✍️ Modelo de Auto o Código (Ej: 'Gol', '620 3000', 'Ranger'):")
+tipo_busqueda = st.radio("¿Qué estás buscando?", ["Embragues (Kits)","Crapodinas","Distribución"], horizontal=True)
+
+busqueda = st.text_input("✍️ Modelo de Auto o Código:")
 
 if busqueda:
-        st.caption(f"Resultados para: '{busqueda}'")
+    hoja_map = {"Embragues (Kits)": "Catalogo_Kits", "Crapodinas": "Catalogo_Crapodinas", "Distribución": "Catalogo_Distribucion"}
+    df_b = leer_hoja_cached(hoja_map[tipo_busqueda])
+    
+    if not df_b.empty:
+        palabras = busqueda.lower().split()
+        mask = pd.Series(True, index=df_b.index)
         
-        # 1. Definimos qué tabla mirar según el botón de arriba
-        if tipo_busqueda == "Embragues (Kits)":
-            df_b = df_kits
-        elif tipo_busqueda == "Crapodinas":
-            df_b = df_crapo
+        for palabra in palabras:
+            mask &= df_b.fillna("").astype(str).apply(
+                lambda x: x.str.contains(palabra, case=False, na=False)
+            ).any(axis=1)
+            
+        df_filtrado = df_b[mask]
+        
+        if not df_filtrado.empty:
+            st.dataframe(df_filtrado, use_container_width=True)
         else:
-            df_b = df_distri
-            
-        # 2. Motor de búsqueda cruzada blindado
-        if not df_b.empty:
-            palabras = busqueda.lower().split()
-            
-            # Forzamos todo a texto plano y unimos la fila completa para que no salten errores de formato
-            texto_filas = df_b.fillna("").astype(str).apply(lambda fila: ' '.join(fila.values).lower(), axis=1)
-            mascara = texto_filas.apply(lambda texto: all(p in texto for p in palabras))
-            df_filtrado = df_b[mascara]
-            
-            if not df_filtrado.empty:
-                st.dataframe(df_filtrado, use_container_width=True)
-            else:
-                st.info("No encontré repuestos con esa combinación.")
-        else:
-            st.warning("La base de datos no tiene datos cargados.")
+            st.info("No encontré resultados.")
+    else:
+        st.warning("La base de datos está vacía.")
 # 9. GESTIÓN DE SALDOS (CUENTAS CORRIENTES)
 st.markdown("---")
 st.markdown("### 📒 Gestión de Cuentas Corrientes")
