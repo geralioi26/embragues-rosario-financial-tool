@@ -397,22 +397,22 @@ tipo_busqueda = st.radio("¿Qué estás buscando?",
 busqueda = st.text_input("✍️ Modelo de Auto o Código (Ej: 'Gol', '620 3000', 'Ranger'):")
 
 if busqueda:
-    st.caption(f"Resultados para: '{busqueda}'")
-    if tipo_busqueda == "Embragues (Kits)":
-        df_b = df_kits
-    elif tipo_busqueda == "Crapodinas":
-        df_b = df_crapo
-    else:
-        df_b = df_distri
-    if not df_b.empty:
-            # 1. Rompemos tu búsqueda en palabras sueltas (ej: "corsa" y "1.6")
-            palabras = busqueda.lower().split()
+        st.caption(f"Resultados para: '{busqueda}'")
+        
+        # 1. Definimos qué tabla mirar según el botón de arriba
+        if tipo_busqueda == "Embragues (Kits)":
+            df_b = df_kits
+        elif tipo_busqueda == "Crapodinas":
+            df_b = df_crapo
+        else:
+            df_b = df_distri
             
-            # 2. Escaneamos la fila completa y verificamos que TODAS las palabras estén presentes
+        # 2. Aplicamos el motor de búsqueda cruzada
+        if not df_b.empty:
+            palabras = busqueda.lower().split()
             mascara = df_b.astype(str).apply(lambda fila: all(p in ' '.join(fila).lower() for p in palabras), axis=1)
             df_filtrado = df_b[mascara]
             
-            # 3. Mostramos el resultado limpio y volamos carteles molestos
             if not df_filtrado.empty:
                 st.dataframe(df_filtrado, use_container_width=True)
             else:
