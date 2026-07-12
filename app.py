@@ -272,8 +272,6 @@ ganancia = monto_limpio - precio_compra
 if monto_limpio > 0:
     st.sidebar.metric("Ganancia Estimada", f"$ {ganancia:,.0f}")
 
-proveedor_input = st.sidebar.text_input("Proveedor:", value="", key=f"prov_{fk}")
-
 st.sidebar.divider()
 st.sidebar.subheader("💰 Estado de la Operación")
 
