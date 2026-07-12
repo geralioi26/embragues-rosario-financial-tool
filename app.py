@@ -389,30 +389,31 @@ try:
 except Exception:
     st.warning("⚠️ No se pudo cargar el historial.")
 
-# 11. BUSCADOR DE CATÁLOGO (Optimizado para no usar RAM)
+# 11. BUSCADOR DE CATÁLOGO
 st.divider()
 st.header("🔍 Consultar Catálogo")
 tipo_busqueda = st.radio("¿Qué estás buscando?", ["Embragues (Kits)","Crapodinas","Distribución"], horizontal=True)
+
 busqueda = st.text_input("✍️ Modelo de Auto o Código:")
 
-# Si no hay búsqueda, no hacemos nada
 if busqueda:
     hoja_map = {"Embragues (Kits)": "Catalogo_Kits", "Crapodinas": "Catalogo_Crapodinas", "Distribución": "Catalogo_Distribucion"}
     
-    # Cargamos los datos solo si no están en memoria
-    if 'df_b' not in st.session_state:
-        st.session_state.df_b = leer_hoja(SHEET_URL, hoja_map[tipo_busqueda])
+    # Cargamos los datos usando la función que ya tenés (que usa caché internamente)
+    df_b = leer_hoja(SHEET_URL, hoja_map[tipo_busqueda])
     
-    df_b = st.session_state.df_b
-    
-    palabras = busqueda.lower().split()
-    mask = pd.Series(True, index=df_b.index)
-    for palabra in palabras:
-        mask &= df_b.fillna("").astype(str).apply(lambda x: x.str.contains(palabra, case=False, na=False)).any(axis=1)
+    if not df_b.empty:
+        palabras = busqueda.lower().split()
+        mask = pd.Series(True, index=df_b.index)
         
-    df_filtrado = df_b[mask]
-    
-    if not df_filtrado.empty:
-        st.dataframe(df_filtrado, use_container_width=True)
-    else:
-        st.info("No encontré resultados.")
+        for palabra in palabras:
+            mask &= df_b.fillna("").astype(str).apply(
+                lambda x: x.str.contains(palabra, case=False, na=False)
+            ).any(axis=1)
+            
+        df_filtrado = df_b[mask]
+        
+        if not df_filtrado.empty:
+            st.dataframe(df_filtrado, use_container_width=True)
+        else:
+            st.info("No encontré resultados.")
