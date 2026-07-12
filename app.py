@@ -181,12 +181,13 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
     except Exception as e:
         st.error(f"Falla al guardar en Crapodinas: {e}")
 
-def guardar_en_google(categoria, cliente, vehiculo, detalle, monto_bruto, monto_neto, costo, proveedor,
+def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_bruto, monto_neto, costo, proveedor,
                       cod_kit, cod_crap, f_pago, e_cliente, e_prov,
                       m_forros, c_forros, costo_f, ganancia):
     fecha_hoy = (datetime.now() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
     
-    columnas = ["Fecha", "Categoría", "Cliente", "Vehículo", "Detalle",
+    # Agregamos "Nro_Trabajo" exactamente en la segunda posición
+    columnas = ["Fecha", "Nro_Trabajo", "Categoría", "Cliente", "Vehículo", "Detalle",
                 "Venta $", "Compra $", "Proveedor", "Código", "Cod_Crapodina",
                 "Forma_de_pago", "Estado_Cobro", "Estado_Pago_Prov",
                 "Marca_Forros", "Cod_Forros", "Costo_Forros", "Ganancia", "Monto Neto Esperado"]
@@ -196,7 +197,8 @@ def guardar_en_google(categoria, cliente, vehiculo, detalle, monto_bruto, monto_
         st.error(f"Error al leer Ventas: {e}")
         st.stop()
         
-    nueva = pd.DataFrame([[fecha_hoy, categoria, cliente, vehiculo, detalle,
+    # Inyectamos la variable nro_trabajo después de fecha_hoy
+    nueva = pd.DataFrame([[fecha_hoy, nro_trabajo, categoria, cliente, vehiculo, detalle,
                            monto_bruto, costo, proveedor, cod_kit, cod_crap,
                            f_pago, e_cliente, e_prov,
                            m_forros, c_forros, costo_f, ganancia, monto_neto]],
