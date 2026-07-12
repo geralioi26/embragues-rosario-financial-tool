@@ -398,15 +398,14 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
         df_ventas = leer_fresca(SHEET_URL, "Ventas")
         
         if tipo_saldo == "Cobro a Cliente":
-            # Filtramos solo los clientes que deben
-            df_deudas = df_ventas[df_ventas['Estado_Cobro'].astype(str).str.strip().str.lower() == "cuenta corriente"]
+            # Filtramos solo los clientes que deben y hacemos una copia segura
+            df_deudas = df_ventas[df_ventas['Estado_Cobro'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
             
             if not df_deudas.empty:
                 
-                # --- TABLA DE RESUMEN POR CLIENTE ---
                 st.write("📊 **Resumen: ¿Cuánto nos debe cada cliente?**")
                 
-                # Apuntamos directamente a 'Venta $'
+                # Apuntamos a 'Venta $'
                 col_monto = None
                 for col in ['Venta $', 'Monto_Neto', 'Monto Neto']:
                     if col in df_deudas.columns:
@@ -414,13 +413,30 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                         break
                         
                 if col_monto:
-                    resumen = df_deudas.groupby('Cliente')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
-                    resumen.columns = ['Cliente', 'Deuda Total ($)']
+                    col_vehiculo = 'Vehículo' if 'Vehículo' in df_deudas.columns else None
+                    col_detalle = 'Detalle' if 'Detalle' in df_deudas.columns else None
+                    
+                    # Fusionamos Vehículo y Detalle
+                    if col_vehiculo and col_detalle:
+                        df_deudas['Resumen_Item'] = df_deudas[col_vehiculo].astype(str) + " (" + df_deudas[col_detalle].astype(str) + ")"
+                        agg_col = 'Resumen_Item'
+                    else:
+                        agg_col = col_vehiculo or col_detalle
+                        
+                    if agg_col:
+                        resumen = df_deudas.groupby('Cliente').agg({
+                            col_monto: lambda x: pd.to_numeric(x, errors='coerce').sum(),
+                            agg_col: lambda x: ' + '.join([str(i) for i in x if str(i).strip()])
+                        }).reset_index()
+                        resumen.columns = ['Cliente', 'Deuda Total ($)', 'Detalle de Trabajos']
+                    else:
+                        resumen = df_deudas.groupby('Cliente')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
+                        resumen.columns = ['Cliente', 'Deuda Total ($)']
+                        
                     st.dataframe(resumen, hide_index=True, use_container_width=True)
                 else:
                     st.warning(f"⚠️ No encuentro la columna de cobro. Las columnas leídas son: {', '.join(df_deudas.columns)}")
                 st.divider()
-                # -----------------------------------------------
                 
                 # MULTISELECT
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
@@ -440,15 +456,14 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 st.info("No hay clientes con cuentas corrientes pendientes.")
                 
         elif tipo_saldo == "Pago a Proveedor":
-            # Filtramos solo las deudas con proveedores
-            df_deudas = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"]
+            # Filtramos deudas de proveedores y hacemos copia segura
+            df_deudas = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
             
             if not df_deudas.empty:
                 
-                # --- TABLA DE RESUMEN POR PROVEEDOR ---
                 st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor?**")
                 
-                # Apuntamos directamente a 'Compra $'
+                # Apuntamos a 'Compra $'
                 col_precio = None
                 for col in ['Compra $', 'Precio_Compra', 'Precio Compra', 'Costo']:
                     if col in df_deudas.columns:
@@ -456,13 +471,30 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                         break
                         
                 if col_precio:
-                    resumen_prov = df_deudas.groupby('Proveedor')[col_precio].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
-                    resumen_prov.columns = ['Proveedor', 'Deuda Total ($)']
+                    col_vehiculo = 'Vehículo' if 'Vehículo' in df_deudas.columns else None
+                    col_detalle = 'Detalle' if 'Detalle' in df_deudas.columns else None
+                    
+                    # Fusionamos Vehículo y Detalle
+                    if col_vehiculo and col_detalle:
+                        df_deudas['Resumen_Item'] = df_deudas[col_vehiculo].astype(str) + " (" + df_deudas[col_detalle].astype(str) + ")"
+                        agg_col = 'Resumen_Item'
+                    else:
+                        agg_col = col_vehiculo or col_detalle
+                        
+                    if agg_col:
+                        resumen_prov = df_deudas.groupby('Proveedor').agg({
+                            col_precio: lambda x: pd.to_numeric(x, errors='coerce').sum(),
+                            agg_col: lambda x: ' + '.join([str(i) for i in x if str(i).strip()])
+                        }).reset_index()
+                        resumen_prov.columns = ['Proveedor', 'Deuda Total ($)', 'Detalle de Repuestos']
+                    else:
+                        resumen_prov = df_deudas.groupby('Proveedor')[col_precio].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
+                        resumen_prov.columns = ['Proveedor', 'Deuda Total ($)']
+                        
                     st.dataframe(resumen_prov, hide_index=True, use_container_width=True)
                 else:
                     st.warning(f"⚠️ No encuentro la columna de pago. Las columnas leídas son: {', '.join(df_deudas.columns)}")
                 st.divider()
-                # -------------------------------------------------
                 
                 # MULTISELECT
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Proveedor'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
