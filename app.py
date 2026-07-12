@@ -247,6 +247,9 @@ else:
     cat_f, icono, incl_rectif = "Venta", "🛠️", False
     sugerencia = "KIT de distribución"
 
+# NUEVO CAMPO: Número de Trabajo
+nro_trabajo_input = st.sidebar.text_input("Nro. de Trabajo (Ej: 168):", value="", key=f"nrotrabajo_{fk}")
+
 monto_limpio = st.sidebar.number_input("Precio de VENTA ($):", min_value=0, value=0, key=f"montolimpio_{fk}")
 vehiculo_input = st.sidebar.text_input("Vehículo:", value="", key=f"vehiculo_{fk}")
 motor_input = st.sidebar.text_input("Motor:", value="", key=f"motor_{fk}")
@@ -306,7 +309,8 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = monto_limpio * MPAGOS_3
     elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = monto_limpio * MPAGOS_6
     
-    guardar_en_google(cat_f, cliente_input, vehiculo_input, detalle_excel,
+    # Inyectamos nro_trabajo_input en la función
+    guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
                       monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
                       cod_kit_final, cod_crap_final, f_pago_input,
                       estado_cliente, estado_p_prov,
