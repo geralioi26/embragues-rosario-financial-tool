@@ -387,7 +387,7 @@ try:
 except Exception:
     st.warning("⚠️ No se pudo cargar el historial.")
 
-# 11. GESTIÓN DE SALDOS (CUENTAS CORRIENTES)
+# 9. GESTIÓN DE SALDOS (CUENTAS CORRIENTES)
 st.markdown("---")
 st.markdown("### 📒 Gestión de Cuentas Corrientes")
 
@@ -403,25 +403,32 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
             
             if not df_deudas.empty:
                 
-                # TABLA DE RESUMEN POR CLIENTE
+                # --- TABLA DE RESUMEN POR CLIENTE ---
                 st.write("📊 **Resumen: ¿Cuánto nos debe cada cliente?**")
-                try:
-                    col_monto = 'Monto_Neto' if 'Monto_Neto' in df_deudas.columns else ('Monto Neto' if 'Monto Neto' in df_deudas.columns else None)
-                    if col_monto:
-                        resumen = df_deudas.groupby('Cliente')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
-                        resumen.columns = ['Cliente', 'Deuda Total ($)']
-                        st.dataframe(resumen, hide_index=True, use_container_width=True)
-                except:
-                    pass 
-                st.divider()
                 
-                # MULTISELECT: Permite elegir varias deudas a la vez
+                # Apuntamos directamente a 'Venta $'
+                col_monto = None
+                for col in ['Venta $', 'Monto_Neto', 'Monto Neto']:
+                    if col in df_deudas.columns:
+                        col_monto = col
+                        break
+                        
+                if col_monto:
+                    resumen = df_deudas.groupby('Cliente')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
+                    resumen.columns = ['Cliente', 'Deuda Total ($)']
+                    st.dataframe(resumen, hide_index=True, use_container_width=True)
+                else:
+                    st.warning(f"⚠️ No encuentro la columna de cobro. Las columnas leídas son: {', '.join(df_deudas.columns)}")
+                st.divider()
+                # -----------------------------------------------
+                
+                # MULTISELECT
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
                 seleccion = st.multiselect("Seleccioná la o las deudas a cobrar (podés elegir varias):", opciones.tolist())
                 
                 if st.button("💰 Registrar Cobro(s)"):
-                    if seleccion: # Si eligió al menos una
-                        for sel in seleccion: # Iteramos sobre todas las seleccionadas
+                    if seleccion:
+                        for sel in seleccion:
                             fecha_sel = sel.split(" | ")[0]
                             cliente_sel = sel.split(" | ")[1]
                             saldar_deuda(fecha_sel, cliente_sel, "Cliente")
@@ -438,25 +445,32 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
             
             if not df_deudas.empty:
                 
-                # TABLA DE RESUMEN POR PROVEEDOR
+                # --- TABLA DE RESUMEN POR PROVEEDOR ---
                 st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor?**")
-                try:
-                    col_precio = 'Precio_Compra' if 'Precio_Compra' in df_deudas.columns else ('Precio Compra' if 'Precio Compra' in df_deudas.columns else None)
-                    if col_precio:
-                        resumen_prov = df_deudas.groupby('Proveedor')[col_precio].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
-                        resumen_prov.columns = ['Proveedor', 'Deuda Total ($)']
-                        st.dataframe(resumen_prov, hide_index=True, use_container_width=True)
-                except:
-                    pass 
-                st.divider()
                 
-                # MULTISELECT: Permite elegir varias deudas a la vez
+                # Apuntamos directamente a 'Compra $'
+                col_precio = None
+                for col in ['Compra $', 'Precio_Compra', 'Precio Compra', 'Costo']:
+                    if col in df_deudas.columns:
+                        col_precio = col
+                        break
+                        
+                if col_precio:
+                    resumen_prov = df_deudas.groupby('Proveedor')[col_precio].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
+                    resumen_prov.columns = ['Proveedor', 'Deuda Total ($)']
+                    st.dataframe(resumen_prov, hide_index=True, use_container_width=True)
+                else:
+                    st.warning(f"⚠️ No encuentro la columna de pago. Las columnas leídas son: {', '.join(df_deudas.columns)}")
+                st.divider()
+                # -------------------------------------------------
+                
+                # MULTISELECT
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Proveedor'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
                 seleccion = st.multiselect("Seleccioná los repuestos a pagar (podés elegir varios):", opciones.tolist())
                 
                 if st.button("💸 Registrar Pago(s)"):
-                    if seleccion: # Si eligió al menos uno
-                        for sel in seleccion: # Iteramos y procesamos todos los seleccionados
+                    if seleccion:
+                        for sel in seleccion:
                             fecha_sel = sel.split(" | ")[0]
                             prov_sel = sel.split(" | ")[1]
                             saldar_deuda(fecha_sel, prov_sel, "Proveedor")
@@ -468,7 +482,7 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 st.info("No tenés cuentas corrientes pendientes con proveedores.")
 
     except Exception as e:
-        st.error(f"Error al cargar las cuentas corrientes: {e}")
+        st.error(f"Error general en cuentas corrientes: {e}")
 
 
 # 12. BUSCADOR DE CATÁLOGO (Optimizado con RAM - Session State)
