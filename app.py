@@ -387,19 +387,32 @@ try:
 except Exception:
     st.warning("⚠️ No se pudo cargar el historial.")
 
-# 11. BUSCADOR DE CATÁLOGO
+# 11. BUSCADOR DE CATÁLOGO (Optimizado con RAM - Session State)
 st.divider()
 st.header("🔍 Consultar Catálogo")
-tipo_busqueda = st.radio("¿Qué estás buscando?", ["Embragues (Kits)","Crapodinas","Distribución"], horizontal=True)
+
+hoja_map = {
+    "Embragues (Kits)": "Catalogo_Kits", 
+    "Crapodinas": "Catalogo_Crapodinas", 
+    "Distribución": "Catalogo_Distribucion"
+}
+
+tipo_busqueda = st.radio("¿Qué estás buscando?", list(hoja_map.keys()), horizontal=True)
+
+# Creamos una clave única para guardar esta pestaña en la memoria de la app
+session_key = f"df_{hoja_map[tipo_busqueda]}"
+
+# Si el catálogo seleccionado todavía no está en memoria, lo traemos de Google Sheets
+if session_key not in st.session_state:
+    st.session_state[session_key] = leer_hoja(SHEET_URL, hoja_map[tipo_busqueda])
+
+# A partir de acá, trabajamos 100% con la memoria RAM, sin pedirle datos a Google
+df_b = st.session_state[session_key]
 
 busqueda = st.text_input("✍️ Modelo de Auto o Código:")
 
+# Si hay texto escrito, filtramos. Si está vacío (o se borró), no hace nada.
 if busqueda:
-    hoja_map = {"Embragues (Kits)": "Catalogo_Kits", "Crapodinas": "Catalogo_Crapodinas", "Distribución": "Catalogo_Distribucion"}
-    
-    # Cargamos los datos usando la función que ya tenés (que usa caché internamente)
-    df_b = leer_hoja(SHEET_URL, hoja_map[tipo_busqueda])
-    
     if not df_b.empty:
         palabras = busqueda.lower().split()
         mask = pd.Series(True, index=df_b.index)
@@ -415,3 +428,5 @@ if busqueda:
             st.dataframe(df_filtrado, use_container_width=True)
         else:
             st.info("No encontré resultados.")
+    else:
+        st.warning("El catálogo seleccionado está vacío en el Excel.")
