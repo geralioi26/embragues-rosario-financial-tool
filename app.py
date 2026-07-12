@@ -5,7 +5,7 @@ from streamlit_gsheets import GSheetsConnection
 import urllib.parse
 
 # 1. IDENTIDAD
-st.set_page_config(page_title="Embragues Rosario", page_icon="🔧")
+st.set_page_config(page_title="Embragues Rosario", page_icon="logo.png")
 try:
     st.image("logo.png", width=300)
 except:
