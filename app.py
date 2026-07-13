@@ -448,17 +448,66 @@ mensaje = (
 )
 st.link_button("🟢 ENVIAR PRESUPUESTO POR WHATSAPP", f"https://wa.me/?text={urllib.parse.quote(mensaje)}")
 
-# 10. HISTORIAL
+# 10. HISTORIAL Y DASHBOARD FINANCIERO
 st.divider()
-st.subheader("📋 Últimos Movimientos")
+
 try:
+    # Leemos la hoja de Excel una sola vez
     df_ver = leer_hoja(SHEET_URL, "Ventas")
+    
     if not df_ver.empty:
+        # --- DASHBOARD DE GANANCIAS ---
+        with st.expander("📊 Tablero de Ganancias (Mes a Mes)"):
+            import pandas as pd
+            import datetime
+            
+            # Hacemos una copia para trabajar los números sin romper la tabla
+            df_dash = df_ver.copy()
+            
+            # Limpiamos las columnas para que el sistema pueda sumar
+            df_dash['Fecha'] = pd.to_datetime(df_dash['Fecha'], dayfirst=True, errors='coerce')
+            df_dash['Ganancia'] = pd.to_numeric(df_dash['Ganancia'], errors='coerce').fillna(0)
+            
+            # Calculamos las fechas de hoy
+            hoy = datetime.date.today()
+            mes_actual = hoy.month
+            anio_actual = hoy.year
+            
+            # Calculamos cuál fue el mes pasado
+            if mes_actual == 1:
+                mes_pasado = 12
+                anio_pasado = anio_actual - 1
+            else:
+                mes_pasado = mes_actual - 1
+                anio_pasado = anio_actual
+                
+            # Filtramos la tabla separando la plata de cada mes
+            df_mes_actual = df_dash[(df_dash['Fecha'].dt.month == mes_actual) & (df_dash['Fecha'].dt.year == anio_actual)]
+            df_mes_pasado = df_dash[(df_dash['Fecha'].dt.month == mes_pasado) & (df_dash['Fecha'].dt.year == anio_pasado)]
+            
+            # Sumamos la ganancia
+            ganancia_actual = df_mes_actual['Ganancia'].sum()
+            ganancia_pasada = df_mes_pasado['Ganancia'].sum()
+            
+            diferencia = ganancia_actual - ganancia_pasada
+            
+            # Mostramos el panel
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(label="Ganancia Este Mes", value=f"${ganancia_actual:,.0f}", delta=f"${diferencia:,.0f} vs Mes Pasado")
+            with col2:
+                st.metric(label="Ganancia Mes Pasado", value=f"${ganancia_pasada:,.0f}")
+                
+        # --- HISTORIAL (Tabla original) ---
+        st.subheader("📋 Últimos Movimientos")
         st.dataframe(df_ver.tail(5)[::-1], use_container_width=True)
+        
     else:
+        st.subheader("📋 Últimos Movimientos")
         st.info("La planilla está vacía todavía.")
-except Exception:
-    st.warning("⚠️ No se pudo cargar el historial.")
+        
+except Exception as e:
+    st.warning(f"⚠️ No se pudo cargar el historial o el tablero. Error: {e}")
 
 # 9. GESTIÓN DE SALDOS (CUENTAS CORRIENTES)
 st.markdown("---")
