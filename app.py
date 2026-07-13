@@ -322,39 +322,41 @@ cod_kit_final = "" if cat_f in ["Reparación", "Rectificación"] else codigo_man
 cod_crap_final = crap_codigo if cat_f == "Reparación" else ""
 
 if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
-    
-    monto_bruto = monto_limpio
-    monto_neto_guardar = monto_limpio
-    
-    if f_pago_input in ["Efectivo", "Transferencia"]:
-        monto_neto_guardar = "-"
-    elif f_pago_input == "Getnet - 1 Pago": monto_bruto = monto_limpio * GETNET_1
-    elif f_pago_input == "Getnet - 3 Cuotas": monto_bruto = monto_limpio * GETNET_3
-    elif f_pago_input == "Getnet - 6 Cuotas": monto_bruto = monto_limpio * GETNET_6
-    elif f_pago_input == "Más Pagos - 1 Pago": monto_bruto = monto_limpio * MPAGOS_1
-    elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = monto_limpio * MPAGOS_3
-    elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = monto_limpio * MPAGOS_6
-    
-    # Inyectamos nro_trabajo_input en la función
-    guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
-                      monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
-                      cod_kit_final, cod_crap_final, f_pago_input,
-                      estado_cliente, estado_p_prov,
-                      m_forros, forros_codigo, forros_costo, ganancia)
-                      
-    if cod_kit_final and cat_f == "Venta":
-        marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
-        actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, precio_compra, marca_k, motor_input, proveedor_input)
-    if cod_crap_final and cat_f == "Reparación":
-        actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}",
-                                       cod_crap_final, crap_costo,
-                                       m_crap[0] if m_crap else "OTRA")
-                                       
-    st.session_state.form_key += 1
-    st.session_state["venta_exitosa"] = "✅ Venta registrada correctamente."
-    st.cache_data.clear()
-    st.rerun()
-
+        
+        monto_bruto = monto_limpio
+        monto_neto_guardar = monto_limpio
+        
+        # Matemática quirúrgica para Links y POS
+        if f_pago_input in ["Efectivo", "Transferencia"]:
+            monto_neto_guardar = "-"
+        elif "Link" in f_pago_input: 
+            monto_bruto = monto_limpio / 0.9758  # Descuento Getnet Plazo Estándar (2.42%)
+        elif f_pago_input == "Getnet - 1 Pago": monto_bruto = monto_limpio * GETNET_1
+        elif f_pago_input == "Getnet - 3 Cuotas": monto_bruto = monto_limpio * GETNET_3
+        elif f_pago_input == "Getnet - 6 Cuotas": monto_bruto = monto_limpio * GETNET_6
+        elif f_pago_input == "Más Pagos - 1 Pago": monto_bruto = monto_limpio * MPAGOS_1
+        elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = monto_limpio * MPAGOS_3
+        elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = monto_limpio * MPAGOS_6
+        
+        # Inyectamos nro_trabajo_input en la función (La rectificación ya va limpia acá)
+        guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
+                          monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
+                          cod_kit_final, cod_crap_final, f_pago_input,
+                          estado_cliente, estado_p_prov,
+                          m_forros, forros_codigo, forros_costo, ganancia)
+                          
+        if cod_kit_final and cat_f == "Venta":
+            marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
+            actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, precio_compra, marca_k, motor_input, proveedor_input)
+        if cod_crap_final and cat_f == "Reparación":
+            actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}",
+                                           cod_crap_final, crap_costo,
+                                           m_crap[0] if m_crap else "OTRA")
+                                           
+        st.session_state.form_key += 1
+        st.session_state["venta_exitosa"] = "✅ Venta registrada correctamente."
+        st.cache_data.clear()
+        st.rerun()
 
 # 8. CALCULADORA DE CUOTAS
 st.markdown("### 💳 Calculadora de Cuotas / Links")
