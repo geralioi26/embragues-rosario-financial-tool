@@ -535,20 +535,23 @@ try:
 
             st.markdown("---")
                 
-            # --- GRÁFICO DE EVOLUCIÓN (MEJORADO) ---
+            # --- GRÁFICO DE EVOLUCIÓN (MEJORADO Y ORDENADO) ---
             st.markdown("**Evolución Diaria de Ganancias (Mes Actual)**")
             if not df_mes_actual.empty:
-                # Agrupamos la ganancia limpia por día exacto
-                grafico_datos = df_mes_actual.groupby(df_mes_actual['Fecha'].dt.day)['Ganancia'].sum()
+                # Agrupamos la ganancia por la FECHA EXACTA (no solo el número del día)
+                grafico_datos = df_mes_actual.groupby(df_mes_actual['Fecha'].dt.date)['Ganancia'].sum()
                 
-                # Rellenamos los días que no hubo ventas con $0 (desde el día 1 hasta hoy)
-                grafico_datos = grafico_datos.reindex(range(1, hoy.day + 1), fill_value=0)
+                # Armamos el calendario completo desde el día 1 hasta hoy para que no queden huecos
+                rango_fechas = pd.date_range(start=datetime.date(anio_actual, mes_actual, 1), end=hoy).date
+                grafico_datos = grafico_datos.reindex(rango_fechas, fill_value=0)
                 
-                # Renombramos el eje X para que quede más prolijo
-                grafico_datos.index = [f"Día {d}" for d in grafico_datos.index]
+                # Le damos el formato exacto de fecha "Día/Mes" (Ej: 01/07, 02/07) para el gráfico
+                grafico_datos.index = [f"{d.day:02d}/{d.month:02d}" for d in grafico_datos.index]
                 
-                # Usamos un gráfico de área que es más visual para el paso del tiempo
-                st.area_chart(grafico_datos)
+                # Usamos gráfico de barras con el eje X ordenado cronológicamente
+                st.bar_chart(grafico_datos)
+            else:
+                st.info("No hay ventas registradas todavía este mes para graficar.")
             else:
                 st.info("No hay ventas registradas todavía este mes para graficar.")
                 
