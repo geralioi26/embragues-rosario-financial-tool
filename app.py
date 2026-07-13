@@ -330,13 +330,13 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
         if f_pago_input in ["Efectivo", "Transferencia"]:
             monto_neto_guardar = "-"
         elif "Link" in f_pago_input: 
-            monto_bruto = monto_limpio / 0.9758  # Descuento Getnet Plazo Estándar (2.42%)
-        elif f_pago_input == "Getnet - 1 Pago": monto_bruto = monto_limpio * GETNET_1
-        elif f_pago_input == "Getnet - 3 Cuotas": monto_bruto = monto_limpio * GETNET_3
-        elif f_pago_input == "Getnet - 6 Cuotas": monto_bruto = monto_limpio * GETNET_6
-        elif f_pago_input == "Más Pagos - 1 Pago": monto_bruto = monto_limpio * MPAGOS_1
-        elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = monto_limpio * MPAGOS_3
-        elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = monto_limpio * MPAGOS_6
+            monto_bruto = int(round(monto_limpio / 0.9758))  # Descuento Getnet Plazo Estándar (2.42%)
+        elif f_pago_input == "Getnet - 1 Pago": monto_bruto = int(round(monto_limpio * GETNET_1))
+        elif f_pago_input == "Getnet - 3 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_3))
+        elif f_pago_input == "Getnet - 6 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_6))
+        elif f_pago_input == "Más Pagos - 1 Pago": monto_bruto = int(round(monto_limpio * MPAGOS_1))
+        elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_3))
+        elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_6))
         
         # Inyectamos nro_trabajo_input en la función (La rectificación ya va limpia acá)
         guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
