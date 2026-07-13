@@ -302,7 +302,7 @@ if monto_limpio > 0:
 st.sidebar.divider()
 st.sidebar.subheader("💰 Estado de la Operación")
 
-estado_cliente = st.sidebar.selectbox("Estado del Cliente:", ["Pagado","Debe","Seña"], index=0, key=f"estcli_{fk}")
+estado_cliente = st.sidebar.selectbox("Estado del Cliente:", ["Pagado","Cuenta Corriente","Seña"], index=0, key=f"estcli_{fk}")
 f_pago_input = "N/A"
 if estado_cliente == "Pagado":
     f_pago_input = st.sidebar.selectbox("¿Cómo pagó?:", [
@@ -354,6 +354,33 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     st.session_state["venta_exitosa"] = "✅ Venta registrada correctamente."
     st.cache_data.clear()
     st.rerun()
+
+# --- CALCULADORA INVERSA GETNET (Aislada del formulario principal) ---
+st.sidebar.divider()
+with st.sidebar.expander("🧮 Calculadora Inversa Getnet (Links)"):
+    st.markdown("Calculá el Link exacto para que te quede tu plata limpia.")
+    
+    # Inputs independientes
+    calc_neto = st.number_input("Plata limpia que necesitás ($):", min_value=0, value=200000, step=1000, key="calc_getnet_neto")
+    calc_plan = st.selectbox("Plan de Cobro (3 Cuotas):", ["Estándar (2 días)", "MiPyME (10 días)"], key="calc_getnet_plan")
+    
+    # Matemática quirúrgica (Descuento Getnet: 2% arancel + 21% IVA = 2.42%)
+    # Para calcular el Bruto se divide el Neto por (1 - 0.0242) -> 0.9758
+    if calc_neto > 0:
+        monto_link = calc_neto / 0.9758
+        st.info(f"**Generar Link por:**\n### $ {monto_link:,.0f}")
+        
+        # Proyección de lo que paga el cliente según el plan
+        st.write("---")
+        if "Estándar" in calc_plan:
+            cliente_paga = monto_link * 1.0913 # Coeficiente Emisor para 3 cuotas
+            st.caption("⏱️ **Acreditación:** 2 días hábiles.")
+            st.caption(f"💳 **El cliente terminará pagando:** ~$ {cliente_paga:,.0f} (con el recargo de su tarjeta).")
+        else:
+            cliente_paga = monto_link * 1.0810 # Coeficiente MiPyME para 3 cuotas
+            st.caption("⏱️ **Acreditación:** 10 días hábiles.")
+            st.caption(f"💳 **El cliente terminará pagando:** ~$ {cliente_paga:,.0f} (con el recargo de su tarjeta).")
+
 
 # 8. CALCULADORA DE CUOTAS
 st.markdown("### 💳 Calculadora de Cuotas")
