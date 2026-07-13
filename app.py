@@ -308,10 +308,10 @@ if estado_cliente == "Pagado":
     f_pago_input = st.sidebar.selectbox("¿Cómo pagó?:", [
         "Efectivo","Transferencia","Débito",
         "BNA - 1 Pago","BNA - 3 Cuotas","BNA - 6 Cuotas",
+        "Link de Pago Getnet",
         "Getnet - 1 Pago","Getnet - 3 Cuotas","Getnet - 6 Cuotas",
         "Más Pagos - 1 Pago","Más Pagos - 3 Cuotas","Más Pagos - 6 Cuotas",
         "Combinado","Otro"], key=f"fpago_{fk}")
-
 # CONDICIÓN: Ocultar pago a proveedor si es rectificación
 if tipo_item != "Rectificación de Volante":
     estado_p_prov = st.sidebar.selectbox("Estado al Proveedor:", ["Pagado","Cuenta Corriente","N/A"], index=0, key=f"estprov_{fk}")
