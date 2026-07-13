@@ -457,16 +457,18 @@ try:
     
     if not df_ver.empty:
         # --- DASHBOARD DE GANANCIAS ---
-        with st.expander("📊 Tablero de Ganancias (Mes a Mes)"):
+        with st.expander("📊 Tablero de Finanzas (Mes a Mes)"):
             import pandas as pd
             import datetime
             
             # Hacemos una copia para trabajar los números sin romper la tabla
             df_dash = df_ver.copy()
             
-            # Limpiamos las columnas para que el sistema pueda sumar
+            # Limpiamos las columnas para que el sistema pueda sumar matemáticamente
             df_dash['Fecha'] = pd.to_datetime(df_dash['Fecha'], dayfirst=True, errors='coerce')
             df_dash['Ganancia'] = pd.to_numeric(df_dash['Ganancia'], errors='coerce').fillna(0)
+            df_dash['Venta $'] = pd.to_numeric(df_dash['Venta $'], errors='coerce').fillna(0)
+            df_dash['Compra $'] = pd.to_numeric(df_dash['Compra $'], errors='coerce').fillna(0)
             
             # Calculamos las fechas de hoy
             hoy = datetime.date.today()
@@ -485,18 +487,63 @@ try:
             df_mes_actual = df_dash[(df_dash['Fecha'].dt.month == mes_actual) & (df_dash['Fecha'].dt.year == anio_actual)]
             df_mes_pasado = df_dash[(df_dash['Fecha'].dt.month == mes_pasado) & (df_dash['Fecha'].dt.year == anio_pasado)]
             
-            # Sumamos la ganancia
+            # --- INDICADORES FINANCIEROS ---
             ganancia_actual = df_mes_actual['Ganancia'].sum()
             ganancia_pasada = df_mes_pasado['Ganancia'].sum()
-            
             diferencia = ganancia_actual - ganancia_pasada
             
-            # Mostramos el panel
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric(label="Ganancia Este Mes", value=f"${ganancia_actual:,.0f}", delta=f"${diferencia:,.0f} vs Mes Pasado")
-            with col2:
-                st.metric(label="Ganancia Mes Pasado", value=f"${ganancia_pasada:,.0f}")
+            # Plata en la calle (Ventas totales en Cuenta Corriente)
+            df_cobrar = df_mes_actual[df_mes_actual['Estado_Cobro'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
+            plata_en_calle = df_cobrar['Venta $'].sum()
+            
+            # Deuda a proveedores (Compras totales en Cuenta Corriente)
+            df_pagar = df_mes_actual[df_mes_actual['Estado_Pago_Prov'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
+            deuda_prov = df_pagar['Compra $'].sum()
+            
+            # Mostramos los 3 bloques principales
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.metric(label="📈 Ganancia Este Mes", value=f"${ganancia_actual:,.0f}", delta=f"${diferencia:,.0f} vs Mes Pasado")
+            with c2:
+                st.metric(label="⏳ A Cobrar (En la Calle)", value=f"${plata_en_calle:,.0f}", delta="Fiado a Clientes", delta_color="off")
+            with c3:
+                st.metric(label="⚠️ A Pagar (Deuda Prov.)", value=f"${deuda_prov:,.0f}", delta="Fiado de Proveedores", delta_color="off")
+                
+            # --- DETALLE DE DEUDORES Y ACREEDORES ---
+            st.markdown("---")
+            col_det_1, col_det_2 = st.columns(2)
+            
+            with col_det_1:
+                st.markdown("**🎯 ¿Quién me debe?**")
+                if not df_cobrar.empty:
+                    detalle_clientes = df_cobrar.groupby('Cliente')['Venta $'].sum().reset_index()
+                    detalle_clientes = detalle_clientes[detalle_clientes['Venta $'] > 0]
+                    # Formato limpio para la tabla
+                    st.dataframe(detalle_clientes.style.format({'Venta $': '${:,.0f}'}), hide_index=True, use_container_width=True)
+                else:
+                    st.success("Nadie te debe plata este mes. ¡Excelente!")
+                    
+            with col_det_2:
+                st.markdown("**🏭 ¿A quién le debo?**")
+                if not df_pagar.empty:
+                    detalle_prov = df_pagar.groupby('Proveedor')['Compra $'].sum().reset_index()
+                    detalle_prov = detalle_prov[detalle_prov['Compra $'] > 0]
+                    # Formato limpio para la tabla
+                    st.dataframe(detalle_prov.style.format({'Compra $': '${:,.0f}'}), hide_index=True, use_container_width=True)
+                else:
+                    st.success("No le debés a ningún proveedor este mes.")
+
+            st.markdown("---")
+                
+            # --- GRÁFICO DE BARRAS ---
+            st.markdown("**Evolución Diaria de Ganancias (Mes Actual)**")
+            if not df_mes_actual.empty:
+                # Agrupamos la ganancia limpia por día exacto
+                grafico_datos = df_mes_actual.groupby(df_mes_actual['Fecha'].dt.day)['Ganancia'].sum()
+                grafico_datos.index.name = "Día del Mes"
+                st.bar_chart(grafico_datos)
+            else:
+                st.info("No hay ventas registradas todavía este mes para graficar.")
                 
         # --- HISTORIAL (Tabla original) ---
         st.subheader("📋 Últimos Movimientos")
