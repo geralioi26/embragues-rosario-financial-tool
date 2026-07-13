@@ -382,22 +382,40 @@ with st.sidebar.expander("🧮 Calculadora Links Getnet"):
 
 
 # 8. CALCULADORA DE CUOTAS
-st.markdown("### 💳 Calculadora de Cuotas")
-tipo_pos = st.radio("¿Qué POS vas a usar?", ["GETNET (1 Pago: 8 días | Cuotas: 18 días)", "MÁS PAGOS (18 días)"], horizontal=True)
+st.markdown("### 💳 Calculadora de Cuotas / Links")
+tipo_pos = st.radio("¿Qué vas a usar?", ["GETNET (Posnet)", "MÁS PAGOS (Posnet)", "LINK DE PAGO (Getnet)"], horizontal=True)
 
-if "GETNET" in tipo_pos:
+if tipo_pos == "LINK DE PAGO (Getnet)":
+    nombre_pos = "LINK GETNET"
+    plan_link = st.selectbox("Plan de Cuotas para el Cliente:", ["Estándar Bancario", "Cuota Simple (MiPyME)"])
+    
+    # Matemática quirúrgica: Descuento Getnet Plazo Estándar (2% arancel + 21% IVA = 2.42%) -> factor divisor 0.9758
+    monto_link = monto_limpio / 0.9758
+    
+    # Coeficientes según el plan que elija para el cliente
+    if "Estándar" in plan_link:
+        c3, c6 = 1.0913, 1.1666
+    else:
+        c3, c6 = 1.0810, 1.1638
+        
+    t1 = monto_link 
+    t3 = monto_link * c3
+    t6 = monto_link * c6
+    
+    st.info(f"🔗 **MONTO DEL LINK A GENERAR:** $ {monto_link:,.0f} (Copiá este valor exacto en la App de Getnet)")
+
+elif "GETNET" in tipo_pos:
     c1, c3, c6 = GETNET_1, GETNET_3, GETNET_6
     nombre_pos = "GETNET"
+    t1, t3, t6 = monto_limpio * c1, monto_limpio * c3, monto_limpio * c6
+    p_1, p_3, p_6 = [(x-1)*100 for x in [c1,c3,c6]]
+    st.info(f"📊 **Recargos:** 1 Pago: {p_1:.1f}% | 3 Cuotas: {p_3:.1f}% | 6 Cuotas: {p_6:.1f}%")
 else:
     c1, c3, c6 = MPAGOS_1, MPAGOS_3, MPAGOS_6
     nombre_pos = "MÁS PAGOS"
-
-t1 = monto_limpio * c1
-t3 = monto_limpio * c3
-t6 = monto_limpio * c6
-
-p_1, p_3, p_6 = [(x-1)*100 for x in [c1,c3,c6]]
-st.info(f"📊 **Recargos:** 1 Pago: {p_1:.1f}% | 3 Cuotas: {p_3:.1f}% | 6 Cuotas: {p_6:.1f}%")
+    t1, t3, t6 = monto_limpio * c1, monto_limpio * c3, monto_limpio * c6
+    p_1, p_3, p_6 = [(x-1)*100 for x in [c1,c3,c6]]
+    st.info(f"📊 **Recargos:** 1 Pago: {p_1:.1f}% | 3 Cuotas: {p_3:.1f}% | 6 Cuotas: {p_6:.1f}%")
 
 st.divider()
 st.markdown(f"""
@@ -408,23 +426,43 @@ st.markdown(f"""
 
 st.write(f"**Precios con {nombre_pos}:**")
 ca, cb, cc = st.columns(3)
-with ca: st.metric("1 PAGO",   f"${t1:,.0f}")
-with cb: st.metric("3 CUOTAS", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
-with cc: st.metric("6 CUOTAS", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
+if "LINK" in tipo_pos:
+    with ca: st.metric("LINK A GENERAR",   f"${t1:,.0f}")
+    with cb: st.metric("Cliente en 3 (Aprox)", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
+    with cc: st.metric("Cliente en 6 (Aprox)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
+else:
+    with ca: st.metric("1 PAGO",   f"${t1:,.0f}")
+    with cb: st.metric("3 CUOTAS", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
+    with cc: st.metric("6 CUOTAS", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
 
 # 9. WHATSAPP
 txt_rectif = "\n✅ *Incluye rectificación y balanceo de volante*" if incl_rectif else ""
 maps_link = "https://www.google.com/maps?q=Crespo+4117+Rosario"
+
+# Texto condicional para no confundir al cliente con el Link vs Posnet
+if "LINK" in tipo_pos:
+    txt_tarjeta = (
+        f"💳 *LINK DE PAGO GETNET:*\n"
+        f"El monto exacto del link es de ${t1:,.0f}.\n"
+        f"*(Si elegís financiar con tu banco, estos son los valores aproximados:)*\n"
+        f"✅ *3 cuotas de:* ${t3/3:,.2f} (Total: ${t3:,.0f})\n"
+        f"✅ *6 cuotas de:* ${t6/6:,.2f} (Total: ${t6:,.0f})\n\n"
+    )
+else:
+    txt_tarjeta = (
+        f"💳 *TARJETA BANCARIA ({nombre_pos}):*\n"
+        f"✅ *1 pago:* ${t1:,.0f}\n\n"
+        f"✅ *3 cuotas de:* ${t3/3:,.2f}\n      (Total: ${t3:,.0f})\n\n"
+        f"✅ *6 cuotas de:* ${t6/6:,.2f}\n      (Total: ${t6:,.0f})\n\n"
+    )
+
 mensaje = (
     f"🚗 *EMBRAGUES ROSARIO*\n"
     f"¡Hola! Gracias por tu consulta. Te paso el presupuesto:\n\n"
     f"🚗 *Vehículo:* {vehiculo_input}\n"
     f"{icono} *Trabajo:* {detalle_final}{txt_rectif}\n\n"
     f"💰 *EFECTIVO / TRANSF:* ${monto_limpio:,.0f}\n\n"
-    f"💳 *TARJETA BANCARIA ({nombre_pos}):*\n"
-    f"✅ *1 pago:* ${t1:,.0f}\n\n"
-    f"✅ *3 cuotas de:* ${t3/3:,.2f}\n      (Total: ${t3:,.0f})\n\n"
-    f"✅ *6 cuotas de:* ${t6/6:,.2f}\n      (Total: ${t6:,.0f})\n\n"
+    f"{txt_tarjeta}"
     f"📍 *Dirección:* Crespo 4117, Rosario\n"
     f"📍 *Ubicación:* {maps_link}\n"
     f"📸 *Instagram:* @embraguesrosario\n"
