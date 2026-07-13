@@ -355,31 +355,30 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     st.cache_data.clear()
     st.rerun()
 
-# --- CALCULADORA INVERSA GETNET (Aislada del formulario principal) ---
+# --- CALCULADORA INVERSA GETNET (Links) ---
 st.sidebar.divider()
-with st.sidebar.expander("🧮 Calculadora Inversa Getnet (Links)"):
-    st.markdown("Calculá el Link exacto para que te quede tu plata limpia.")
+with st.sidebar.expander("🧮 Calculadora Links Getnet"):
+    st.markdown("Calculá el Link para cobrar exacto el precio de contado.")
     
-    # Inputs independientes
-    calc_neto = st.number_input("Plata limpia que necesitás ($):", min_value=0, value=200000, step=1000, key="calc_getnet_neto")
-    calc_plan = st.selectbox("Plan de Cobro (3 Cuotas):", ["Estándar (2 días)", "MiPyME (10 días)"], key="calc_getnet_plan")
+    # Input principal: El precio que pasaste de palabra
+    precio_contado = st.number_input("Precio de Venta (Contado $):", min_value=0, value=250000, step=1000, key="calc_link_precio")
+    calc_plan = st.selectbox("Plan (3 Cuotas):", ["Estándar (2 días)", "MiPyME (10 días)"], key="calc_link_plan")
     
-    # Matemática quirúrgica (Descuento Getnet: 2% arancel + 21% IVA = 2.42%)
-    # Para calcular el Bruto se divide el Neto por (1 - 0.0242) -> 0.9758
-    if calc_neto > 0:
-        monto_link = calc_neto / 0.9758
+    # Matemática: Queremos que nos quede el "precio_contado" libre de la comisión de Getnet (2.42%)
+    if precio_contado > 0:
+        monto_link = precio_contado / 0.9758
         st.info(f"**Generar Link por:**\n### $ {monto_link:,.0f}")
         
-        # Proyección de lo que paga el cliente según el plan
+        # Proyección cliente
         st.write("---")
         if "Estándar" in calc_plan:
-            cliente_paga = monto_link * 1.0913 # Coeficiente Emisor para 3 cuotas
+            cliente_paga = monto_link * 1.0913 
             st.caption("⏱️ **Acreditación:** 2 días hábiles.")
-            st.caption(f"💳 **El cliente terminará pagando:** ~$ {cliente_paga:,.0f} (con el recargo de su tarjeta).")
+            st.caption(f"💳 **El cliente pagará aprox:** $ {cliente_paga:,.0f}")
         else:
-            cliente_paga = monto_link * 1.0810 # Coeficiente MiPyME para 3 cuotas
+            cliente_paga = monto_link * 1.0810 
             st.caption("⏱️ **Acreditación:** 10 días hábiles.")
-            st.caption(f"💳 **El cliente terminará pagando:** ~$ {cliente_paga:,.0f} (con el recargo de su tarjeta).")
+            st.caption(f"💳 **El cliente pagará aprox:** $ {cliente_paga:,.0f}")
 
 
 # 8. CALCULADORA DE CUOTAS
