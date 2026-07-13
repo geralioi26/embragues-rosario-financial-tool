@@ -550,7 +550,7 @@ try:
                 
                 # Usamos gráfico de barras con el eje X ordenado cronológicamente
                 st.bar_chart(grafico_datos)
-             else:
+            else:
                 st.info("No hay ventas registradas todavía este mes para graficar.")
             else:
                 st.info("No hay ventas registradas todavía este mes para graficar.")
