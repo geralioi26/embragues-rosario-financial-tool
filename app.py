@@ -225,7 +225,7 @@ forros_costo = crap_costo = 0
 m_crap = []
 
 tipo_item = st.sidebar.selectbox("Tipo de Trabajo:",
-    ["Embrague Nuevo (Venta)", "Reparación de Embrague", "Kit de Distribución", "Otro"], key=f"tipo_{fk}")
+    ["Embrague Nuevo (Venta)", "Reparación de Embrague", "Rectificación de Volante", "Kit de Distribución", "Otro"], key=f"tipo_{fk}")
 
 if "Nuevo" in tipo_item:
     cat_f, icono, incl_rectif = "Venta", "⚙️", False
@@ -243,28 +243,50 @@ elif "Reparación" in tipo_item:
     m_neg = [f"*{m}*" for m in m_crap]
     t_m = (", ".join(m_neg[:-1]) + " o " + m_neg[-1]) if len(m_neg) > 1 else (m_neg[0] if m_neg else "*primera marca*")
     sugerencia = f"reparado completo placa disco con forros originales volante rectificado y balanceado con crapodina {t_m}"
+elif "Rectificación" in tipo_item:
+    cat_f, icono, incl_rectif = "Rectificación", "⚙️", True
+    sugerencia = "Rectificación de volante"
 else:
     cat_f, icono, incl_rectif = "Venta", "🛠️", False
     sugerencia = "KIT de distribución"
 
-# NUEVO CAMPO: Número de Trabajo
-nro_trabajo_input = st.sidebar.text_input("Nro. de Trabajo (Ej: 168):", value="", key=f"nrotrabajo_{fk}")
+# CONDICIÓN: Ocultar Nro de Trabajo si es Rectificación
+if tipo_item != "Rectificación de Volante":
+    nro_trabajo_input = st.sidebar.text_input("Nro. de Trabajo (Ej: 168):", value="", key=f"nrotrabajo_{fk}")
+else:
+    nro_trabajo_input = ""
 
 monto_limpio = st.sidebar.number_input("Precio de VENTA ($):", min_value=0, value=0, key=f"montolimpio_{fk}")
 vehiculo_input = st.sidebar.text_input("Vehículo:", value="", key=f"vehiculo_{fk}")
 motor_input = st.sidebar.text_input("Motor:", value="", key=f"motor_{fk}")
-proveedor_input = st.sidebar.text_input("Proveedor:", value="", key=f"proveedor_{fk}")
+
+# CONDICIÓN: Ocultar Proveedor si es Rectificación
+if tipo_item != "Rectificación de Volante":
+    proveedor_input = st.sidebar.text_input("Proveedor:", value="", key=f"proveedor_{fk}")
+else:
+    proveedor_input = "Taller Propio"
+
+# Ajuste del Detalle
+if tipo_item == "Rectificación de Volante":
+    detalle_excel = st.sidebar.text_input("📝 Detalle para Excel:", value="Rectificación volante", key=f"detalle_{fk}")
+else:
+    detalle_excel = st.sidebar.text_input("📝 Detalle para Excel:", value="Venta / Reparación", key=f"detalle_{fk}")
+    
 cliente_input = st.sidebar.text_input("Nombre del Cliente:", value="", key=f"cliente_{fk}")
-detalle_excel = st.sidebar.text_input("📝 Detalle para Excel:", value="Venta / Reparación", key=f"detalle_{fk}")
 detalle_final = st.sidebar.text_area("💬 Detalle en WhatsApp:", value=sugerencia, key=f"detwhats_{fk}")
 
 st.sidebar.divider()
 st.sidebar.write("📸 **Uso Interno**")
 
+# Lógica de costos según tipo
 if cat_f == "Reparación":
     codigo_manual = crap_codigo
     precio_compra = crap_costo + forros_costo
     st.sidebar.info(f"💰 Costo Materiales: ${precio_compra:,.0f}")
+elif cat_f == "Rectificación":
+    codigo_manual = ""
+    precio_compra = 0
+    st.sidebar.info("💰 Costo Materiales: $0 (Servicio Propio)")
 else:
     codigo_manual = st.sidebar.text_input("Código de repuesto:", "", key=f"codrep_{fk}")
     precio_compra = st.sidebar.number_input("Precio de COMPRA ($):", min_value=0, value=0, key=f"precomp_{fk}")
@@ -290,9 +312,13 @@ if estado_cliente == "Pagado":
         "Más Pagos - 1 Pago","Más Pagos - 3 Cuotas","Más Pagos - 6 Cuotas",
         "Combinado","Otro"], key=f"fpago_{fk}")
 
-estado_p_prov = st.sidebar.selectbox("Estado al Proveedor:", ["Pagado","Cuenta Corriente","N/A"], index=0, key=f"estprov_{fk}")
+# CONDICIÓN: Ocultar pago a proveedor si es rectificación
+if tipo_item != "Rectificación de Volante":
+    estado_p_prov = st.sidebar.selectbox("Estado al Proveedor:", ["Pagado","Cuenta Corriente","N/A"], index=0, key=f"estprov_{fk}")
+else:
+    estado_p_prov = "N/A"
 
-cod_kit_final = "" if cat_f == "Reparación" else codigo_manual
+cod_kit_final = "" if cat_f in ["Reparación", "Rectificación"] else codigo_manual
 cod_crap_final = crap_codigo if cat_f == "Reparación" else ""
 
 if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
@@ -316,10 +342,10 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
                       estado_cliente, estado_p_prov,
                       m_forros, forros_codigo, forros_costo, ganancia)
                       
-    if cod_kit_final:
+    if cod_kit_final and cat_f == "Venta":
         marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
         actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, precio_compra, marca_k, motor_input, proveedor_input)
-    if cod_crap_final:
+    if cod_crap_final and cat_f == "Reparación":
         actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}",
                                        cod_crap_final, crap_costo,
                                        m_crap[0] if m_crap else "OTRA")
