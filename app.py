@@ -770,22 +770,39 @@ st.subheader("📦 Gestión de Inventario y Stock")
 with st.expander("Abrir panel para ingresar mercadería"):
     with st.form("form_stock", clear_on_submit=False):
         st.write("📝 **Carga de repuestos e insumos nuevos**")
-        col1, col2 = st.columns(2)
         
+        # Fila 1: Categoría, Vehículo y Motor
+        col1, col2, col3 = st.columns(3)
         with col1:
             categoria_stock = st.selectbox("Categoría", ["Kits de Embrague", "Forros IAR Metal", "Crapodinas", "Distribución", "Frenos", "Otros"])
-            detalle_stock = st.text_input("Detalle del Artículo (Ej: Kit Sachs VW Gol)")
-            
         with col2:
+            vehiculo_stock = st.text_input("Vehículo (Ej: Gol Power)")
+        with col3:
+            motor_stock = st.text_input("Motor (Ej: 1.6)")
+            
+        # Fila 2: Marca, Código, Cantidad y Costo
+        col4, col5, col6, col7 = st.columns(4)
+        with col4:
+            marca_stock = st.text_input("Marca (Ej: Sachs, LUK, Valeo)")
+        with col5:
+            codigo_stock = st.text_input("Código de Fábrica")
+        with col6:
             cantidad_stock = st.number_input("Cantidad a ingresar", min_value=1, step=1)
+        with col7:
             costo_stock = st.number_input("Costo Unitario ($)", min_value=0, step=1000)
             
         submit_stock = st.form_submit_button("📥 Guardar en Estantería")
         
         if submit_stock:
-            if detalle_stock != "" and costo_stock > 0:
+            # Validamos que al menos haya puesto un vehículo o un código, y que el costo sea mayor a 0
+            if (vehiculo_stock != "" or codigo_stock != "") and costo_stock > 0:
+                
+                # Juntamos los textos para armar un detalle limpio
+                partes_detalle = [p.strip() for p in [vehiculo_stock, motor_stock, marca_stock, codigo_stock] if p.strip() != ""]
+                detalle_unido = " | ".join(partes_detalle)
+                
                 # Armamos el paquete exacto de 4 datos
-                datos_stock = [categoria_stock, detalle_stock, cantidad_stock, costo_stock]
+                datos_stock = [categoria_stock, detalle_unido, cantidad_stock, costo_stock]
                 
                 try:
                     # 1. Leemos la hoja de Stock fresca
@@ -808,9 +825,9 @@ with st.expander("Abrir panel para ingresar mercadería"):
                     conn.update(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", data=df_actualizado_stock)
                     
                     st.cache_data.clear()
-                    st.success(f"✅ ¡Entró al stock! {cantidad_stock}x {detalle_stock}.")
+                    st.success(f"✅ ¡Entró al stock! {cantidad_stock}x de: {detalle_unido}.")
                     
                 except Exception as e:
                     st.error(f"⚠️ Error al guardar el stock: {e}")
             else:
-                st.warning("⚠️ Escribí el detalle del repuesto y asegurate que el costo sea mayor a $0.")
+                st.warning("⚠️ Asegurate de escribir al menos el Vehículo o el Código, y que el costo en pesos sea mayor a $0.")
