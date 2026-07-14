@@ -574,38 +574,30 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
     try:
         df_ventas = leer_fresca(SHEET_URL, "Ventas")
         
+        # ==========================================
+        # OPCIÓN 1: COBRO A CLIENTES
+        # ==========================================
         if tipo_saldo == "Cobro a Cliente":
-            # Filtramos solo los clientes que deben y hacemos una copia segura
             df_deudas = df_ventas[df_ventas['Estado_Cobro'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
             
             if not df_deudas.empty:
-                # Usamos la columna exacta que validamos en tu Excel
                 col_monto = 'Venta $'
                 
-                # 1. TABLA RESUMEN: Totales por Cliente
                 st.write("📊 **Resumen: ¿Cuánto nos debe cada cliente en total?**")
                 resumen_totales = df_deudas.groupby('Cliente')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
                 resumen_totales.columns = ['Cliente', 'Deuda Total ($)']
-                
-                # Le damos formato de pesos argentinos limpios
                 st.dataframe(resumen_totales.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
                 
-                # 2. TABLA DESGLOSE: Renglón por renglón
                 st.write("📝 **Desglose exacto de los trabajos pendientes:**")
-                
-                # Seleccionamos solo las columnas útiles para el reclamo
                 cols_mostrar = ['Fecha', 'Cliente', 'Vehículo', 'Detalle', col_monto]
                 cols_finales = [c for c in cols_mostrar if c in df_deudas.columns]
                 
                 df_detalle = df_deudas[cols_finales].copy()
                 df_detalle[col_monto] = pd.to_numeric(df_detalle[col_monto], errors='coerce').fillna(0)
-                
-                # Mostramos la tabla lista para leer
                 st.dataframe(df_detalle.style.format({col_monto: '${:,.0f}'}), hide_index=True, use_container_width=True)
                 
                 st.divider()
                 
-                # 3. PANEL DE COBRO MULTISELECCIÓN (Integrado y alineado)
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
                 seleccion = st.multiselect("Seleccioná la o las deudas a cobrar (podés elegir varias):", opciones.tolist())
                 
@@ -618,72 +610,36 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                         st.success(f"✅ {len(seleccion)} cobro(s) registrado(s). El Excel se actualizó a 'Pagado'.")
                     else:
                         st.warning("⚠️ Seleccioná al menos una deuda para cobrar.")
-                        
             else:
                 st.success("✅ No hay deudas de clientes registradas. ¡Están todos al día!")
                 st.divider()
-                
-                # MULTISELECT
-                opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
-                seleccion = st.multiselect("Seleccioná la o las deudas a cobrar (podés elegir varias):", opciones.tolist())
-                
-                if st.button("💰 Registrar Cobro(s)"):
-                    if seleccion:
-                        for sel in seleccion:
-                            fecha_sel = sel.split(" | ")[0]
-                            cliente_sel = sel.split(" | ")[1]
-                            saldar_deuda(fecha_sel, cliente_sel, "Cliente")
-                        st.success(f"{len(seleccion)} cobro(s) registrado(s). El Excel se actualizó a 'Pagado'.")
-                        st.rerun()
-                    else:
-                        st.warning("Seleccioná al menos una deuda para cobrar.")
-            else:
-                st.info("No hay clientes con cuentas corrientes pendientes.")
-                
+
+        # ==========================================
+        # OPCIÓN 2: PAGO A PROVEEDORES
+        # ==========================================
         elif tipo_saldo == "Pago a Proveedor":
-            # Filtramos deudas de proveedores y hacemos copia segura
             df_deudas = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
             
             if not df_deudas.empty:
+                col_monto = 'Compra $'
                 
                 st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor?**")
+                resumen_totales = df_deudas.groupby('Proveedor')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
+                resumen_totales.columns = ['Proveedor', 'Deuda Total ($)']
+                st.dataframe(resumen_totales.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
                 
-                # Apuntamos a 'Compra $'
-                col_precio = None
-                for col in ['Compra $', 'Precio_Compra', 'Precio Compra', 'Costo']:
-                    if col in df_deudas.columns:
-                        col_precio = col
-                        break
-                        
-                if col_precio:
-                    col_vehiculo = 'Vehículo' if 'Vehículo' in df_deudas.columns else None
-                    col_detalle = 'Detalle' if 'Detalle' in df_deudas.columns else None
-                    
-                    # Fusionamos Vehículo y Detalle
-                    if col_vehiculo and col_detalle:
-                        df_deudas['Resumen_Item'] = df_deudas[col_vehiculo].astype(str) + " (" + df_deudas[col_detalle].astype(str) + ")"
-                        agg_col = 'Resumen_Item'
-                    else:
-                        agg_col = col_vehiculo or col_detalle
-                        
-                    if agg_col:
-                        resumen_prov = df_deudas.groupby('Proveedor').agg({
-                            col_precio: lambda x: pd.to_numeric(x, errors='coerce').sum(),
-                            agg_col: lambda x: ' + '.join([str(i) for i in x if str(i).strip()])
-                        }).reset_index()
-                        resumen_prov.columns = ['Proveedor', 'Deuda Total ($)', 'Detalle de Repuestos']
-                    else:
-                        resumen_prov = df_deudas.groupby('Proveedor')[col_precio].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
-                        resumen_prov.columns = ['Proveedor', 'Deuda Total ($)']
-                        
-                    st.dataframe(resumen_prov, hide_index=True, use_container_width=True)
-                else:
-                    st.warning(f"⚠️ No encuentro la columna de pago. Las columnas leídas son: {', '.join(df_deudas.columns)}")
+                st.write("📝 **Desglose exacto de las compras pendientes:**")
+                cols_mostrar = ['Fecha', 'Proveedor', 'Vehículo', 'Detalle', col_monto]
+                cols_finales = [c for c in cols_mostrar if c in df_deudas.columns]
+                
+                df_detalle = df_deudas[cols_finales].copy()
+                df_detalle[col_monto] = pd.to_numeric(df_detalle[col_monto], errors='coerce').fillna(0)
+                st.dataframe(df_detalle.style.format({col_monto: '${:,.0f}'}), hide_index=True, use_container_width=True)
+                
                 st.divider()
                 
-                # MULTISELECT
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Proveedor'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
-                seleccion = st.multiselect("Seleccioná los repuestos a pagar (podés elegir varios):", opciones.tolist())
+                seleccion = st.multiselect("Seleccioná la o las deudas a pagar (podés elegir varias):", opciones.tolist())
                 
                 if st.button("💸 Registrar Pago(s)"):
                     if seleccion:
@@ -691,15 +647,15 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                             fecha_sel = sel.split(" | ")[0]
                             prov_sel = sel.split(" | ")[1]
                             saldar_deuda(fecha_sel, prov_sel, "Proveedor")
-                        st.success(f"{len(seleccion)} pago(s) registrado(s). El Excel se actualizó a 'Pagado'.")
-                        st.rerun()
+                        st.success(f"✅ {len(seleccion)} pago(s) registrado(s). El Excel se actualizó a 'Pagado'.")
                     else:
-                        st.warning("Seleccioná al menos un repuesto para pagar.")
+                        st.warning("⚠️ Seleccioná al menos una deuda para pagar.")
             else:
-                st.info("No tenés cuentas corrientes pendientes con proveedores.")
-
+                st.success("✅ No le debemos a ningún proveedor. ¡Cuentas al día!")
+                st.divider()
+                
     except Exception as e:
-        st.error(f"Error general en cuentas corrientes: {e}")
+        st.error(f"⚠️ Error al cargar las deudas: {e}")
 
 
 # 12. BUSCADOR DE CATÁLOGO (Optimizado con RAM - Session State)
