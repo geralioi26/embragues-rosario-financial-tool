@@ -835,79 +835,98 @@ with st.expander("Abrir panel para ingresar mercadería"):
 st.divider()
 st.subheader("🔄 Base de Datos Técnica (Actualización de Códigos)")
 
-with st.expander("Abrir panel para cargar Códigos de Kits"):
-    with st.form("form_actualizar_kits", clear_on_submit=False):
-        st.write("📝 **Modificar o agregar equivalencias y códigos de fábrica**")
+# El selector maestro va AFUERA del form para que actualice la pantalla en tiempo real
+tipo_catalogo = st.selectbox("¿Qué base de datos vas a actualizar?", ["Kits de Embrague", "Crapodinas"])
+
+with st.expander(f"Abrir panel para cargar Códigos de {tipo_catalogo}"):
+    with st.form("form_actualizar_codigos", clear_on_submit=False):
+        st.write(f"📝 **Modificar o agregar equivalencias para {tipo_catalogo}**")
         
-        # Fila 1: Identificación del vehículo
+        # Fila 1: Identificación del vehículo adaptada al catálogo
         col1, col2 = st.columns(2)
         with col1:
-            vehiculo_cat = st.text_input("Vehículo exacto (Ej: Peugeot 307)")
+            vehiculo_cat = st.text_input("Vehículo exacto (Ej: Peugeot 307 / 206)")
         with col2:
-            motor_cat = st.text_input("Motor (Ej: 2.0)")
-            
-        # Fila 2: El código nuevo a inyectar
+            if tipo_catalogo == "Kits de Embrague":
+                detalle_cat = st.text_input("Motor (Ej: 2.0)")
+                marcas_disponibles = ["LUK", "SACHS", "VALEO", "PHC_valeo", "ORIGINAL", "OTRA"]
+            else: # Crapodinas
+                detalle_cat = st.text_input("Descripción (Ej: Crapodina Mecánica)")
+                marcas_disponibles = ["LUK", "SKF", "DBH", "THE", "ORIGINAL", "OTRA"]
+                
+        # Fila 2: El código nuevo a inyectar con las marcas dinámicas
         col3, col4 = st.columns(2)
         with col3:
-            marca_cat = st.selectbox("¿De qué marca es el código?", ["LUK", "SACHS", "VALEO", "PHC_valeo", "ORIGINAL", "OTRA"])
+            marca_cat = st.selectbox("¿De qué marca es el código?", marcas_disponibles)
         with col4:
             codigo_cat = st.text_input("Nuevo Código de Fábrica")
             
-        submit_cat_kits = st.form_submit_button("💾 Guardar Código en Base de Datos")
+        submit_cat = st.form_submit_button("💾 Guardar Código en Base de Datos")
         
-        if submit_cat_kits:
-            # Ahora obligamos a que sí o sí haya escrito un vehículo y un código
+        if submit_cat:
             if vehiculo_cat != "" and codigo_cat != "":
                 try:
-                    df_kits = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", ttl=0)
+                    # Seteamos las reglas estrictas dependiendo de lo que elegiste
+                    if tipo_catalogo == "Kits de Embrague":
+                        nombre_hoja = "Catalogo_Kits"
+                        columnas_cat = [
+                            "Vehiculo", "Motor", "Proveedor", 
+                            "Codigo_LUK", "Precio_LUK", "Codigo_SACHS", "Precio_SACHS", 
+                            "Codigo_VALEO", "Precio_VALEO", "Codigo_PHC_valeo", "Precio_PHC_valeo", 
+                            "Codigo_ORIGINAL", "Precio_ORIGINAL", "Codigo_OTRA", "Precio_OTRA"
+                        ]
+                        col_detalle_nombre = "Motor"
+                    else: # Crapodinas
+                        nombre_hoja = "Catalogo_Crapodinas"
+                        columnas_cat = [
+                            "Vehiculo", "Descripcion", 
+                            "Codigo_LUK", "Precio_LUK", "Codigo_SKF", "Precio_SKF", 
+                            "Codigo_DBH", "Precio_DBH", "Codigo_THE", "Precio_THE", 
+                            "Codigo_ORIGINAL", "Precio_ORIGINAL", "Codigo_OTRA", "Precio_OTRA"
+                        ]
+                        col_detalle_nombre = "Descripcion"
+
+                    df_cat = conn.read(spreadsheet=SHEET_URL, worksheet=nombre_hoja, ttl=0)
                     
-                    # BLINDAJE: Las 15 columnas exactas de tu Excel para no romper nada
-                    columnas_kits = [
-                        "Vehiculo", "Motor", "Proveedor", 
-                        "Codigo_LUK", "Precio_LUK", "Codigo_SACHS", "Precio_SACHS", 
-                        "Codigo_VALEO", "Precio_VALEO", "Codigo_PHC_valeo", "Precio_PHC_valeo", 
-                        "Codigo_ORIGINAL", "Precio_ORIGINAL", "Codigo_OTRA", "Precio_OTRA"
-                    ]
-                    
-                    if df_kits.empty:
-                        df_kits = pd.DataFrame(columns=columnas_kits)
+                    if df_cat.empty:
+                        df_cat = pd.DataFrame(columns=columnas_cat)
                     else:
-                        df_kits = df_kits[columnas_kits]
+                        df_cat = df_cat[columnas_cat]
                     
-                    df_kits['Veh_norm'] = df_kits['Vehiculo'].astype(str).str.strip().str.lower()
-                    df_kits['Mot_norm'] = df_kits['Motor'].astype(str).str.strip().str.lower()
+                    df_cat['Veh_norm'] = df_cat['Vehiculo'].astype(str).str.strip().str.lower()
+                    df_cat['Det_norm'] = df_cat[col_detalle_nombre].astype(str).str.strip().str.lower()
                     
                     veh_buscar = vehiculo_cat.strip().lower()
-                    mot_buscar = motor_cat.strip().lower()
+                    det_buscar = detalle_cat.strip().lower()
                     
-                    mask = (df_kits['Veh_norm'] == veh_buscar) & (df_kits['Mot_norm'] == mot_buscar)
+                    mask = (df_cat['Veh_norm'] == veh_buscar) & (df_cat['Det_norm'] == det_buscar)
                     
                     col_codigo = f"Codigo_{marca_cat}"
                     
-                    # BLINDAJE DE FORMATO: Ablandamos para que no tire error si el código tiene letras
-                    df_kits[col_codigo] = df_kits[col_codigo].astype(object)
+                    # BLINDAJE DE FORMATO
+                    df_cat[col_codigo] = df_cat[col_codigo].astype(object)
                     
                     if mask.any():
-                        # EL AUTO EXISTE: Se mete en el renglón y guarda solo el código en la marca elegida
-                        idx = df_kits[mask].index[0]
-                        df_kits.at[idx, col_codigo] = codigo_cat
+                        # EL REPUESTO EXISTE: actualiza el código en la marca elegida
+                        idx = df_cat[mask].index[0]
+                        df_cat.at[idx, col_codigo] = codigo_cat
                         accion_msj = "actualizado"
                     else:
-                        # EL AUTO NO EXISTE: Crea fila nueva y le asigna el código
-                        nueva_fila = {col: "" for col in columnas_kits}
+                        # EL REPUESTO NO EXISTE: crea fila nueva
+                        nueva_fila = {col: "" for col in columnas_cat}
                         nueva_fila["Vehiculo"] = vehiculo_cat
-                        nueva_fila["Motor"] = motor_cat
+                        nueva_fila[col_detalle_nombre] = detalle_cat
                         nueva_fila[col_codigo] = codigo_cat
                         
                         df_nueva = pd.DataFrame([nueva_fila])
-                        df_kits = pd.concat([df_kits, df_nueva], ignore_index=True)
+                        df_cat = pd.concat([df_cat, df_nueva], ignore_index=True)
                         accion_msj = "creado"
                     
-                    df_kits = df_kits.drop(columns=['Veh_norm', 'Mot_norm'])
-                    conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", data=df_kits)
+                    df_cat = df_cat.drop(columns=['Veh_norm', 'Det_norm'])
+                    conn.update(spreadsheet=SHEET_URL, worksheet=nombre_hoja, data=df_cat)
                     
                     st.cache_data.clear()
-                    st.success(f"✅ ¡Código {accion_msj} con éxito! {vehiculo_cat} {motor_cat} | {marca_cat}: {codigo_cat}")
+                    st.success(f"✅ ¡Código {accion_msj} con éxito en {tipo_catalogo}! {vehiculo_cat} {detalle_cat} | {marca_cat}: {codigo_cat}")
                     
                 except Exception as e:
                     st.error(f"⚠️ Error al guardar el código: {e}")
