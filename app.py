@@ -657,6 +657,58 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
     except Exception as e:
         st.error(f"⚠️ Error al cargar las deudas: {e}")
 
+st.divider()
+st.subheader("💸 Gestión de Gastos e Inversiones")
+
+with st.expander("Abrir panel para registrar una salida de dinero"):
+    with st.form("form_gastos", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fecha_gasto = st.date_input("Fecha")
+            clasificacion = st.selectbox("Clasificación (¡Clave para los números!)", ["Gasto Operativo", "Inversión en Stock"])
+            categoria = st.selectbox("Categoría", ["Cadetería / Fletes", "Impuestos / AFIP", "Compra de Mercadería", "Insumos de Taller", "Otros"])
+            proveedor = st.text_input("Proveedor o Destinatario (Ej: Icepar, Juan Cadete)")
+            
+        with col2:
+            detalle = st.text_input("Detalle exacto (¿Qué se pagó?)")
+            monto = st.number_input("Monto ($)", min_value=0, step=1000)
+            estado_pago = st.selectbox("Estado del Pago", ["Pagado (Contado/Transf)", "Cuenta Corriente"])
+            
+        submit_gasto = st.form_submit_button("💾 Guardar Registro")
+        
+        if submit_gasto:
+            if monto > 0 and detalle != "":
+                # Formateamos la fecha al estilo argentino
+                fecha_str = fecha_gasto.strftime("%d/%m/%Y")
+                
+                # Armamos el paquete de datos exacto para tu Excel
+                datos_gasto = [fecha_str, clasificacion, categoria, detalle, monto, estado_pago, proveedor]
+                
+                try:
+                    # 1. Leemos cómo está la hoja de Gastos AHORA (sin caché, datos frescos)
+                    df_gastos = conn.read(spreadsheet=SHEET_URL, worksheet="Gastos", ttl=0)
+                    
+                    # 2. Armamos la nueva fila asegurando que las columnas coincidan
+                    nueva_fila = pd.DataFrame([datos_gasto], columns=df_gastos.columns)
+                    
+                    # 3. Pegamos la fila nueva abajo de todo
+                    df_actualizado = pd.concat([df_gastos, nueva_fila], ignore_index=True)
+                    
+                    # 4. Inyectamos el bloque blindado de vuelta al Excel
+                    conn.update(spreadsheet=SHEET_URL, worksheet="Gastos", data=df_actualizado)
+                    
+                    # Limpiamos la memoria para que el sistema reconozca el cambio al instante
+                    st.cache_data.clear()
+                    
+                    st.success(f"✅ ¡Gasto registrado con éxito! {detalle} por ${monto}.")
+                    
+                except Exception as e:
+                    st.error(f"⚠️ Error al inyectar los datos en el Excel: {e}")
+                
+            else:
+                st.warning("⚠️ El monto debe ser mayor a $0 y el detalle no puede estar vacío.")
+
 
 # 12. BUSCADOR DE CATÁLOGO (Optimizado con RAM - Session State)
 st.divider()
