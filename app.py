@@ -552,8 +552,6 @@ try:
                 st.bar_chart(grafico_datos)
             else:
                 st.info("No hay ventas registradas todavía este mes para graficar.")
-            else:
-                st.info("No hay ventas registradas todavía este mes para graficar.")
                 
         # --- HISTORIAL (Tabla original) ---
         st.subheader("📋 Últimos Movimientos")
