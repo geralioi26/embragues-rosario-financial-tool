@@ -665,7 +665,7 @@ with st.expander("Abrir panel para registrar una salida de dinero"):
         col1, col2 = st.columns(2)
         
         with col1:
-            fecha_gasto = st.date_input("Fecha")
+            fecha_gasto = st.date_input("Fecha", format="DD/MM/YYYY")
             clasificacion = st.selectbox("Clasificación (¡Clave para los números!)", ["Gasto Operativo", "Inversión en Stock"])
             categoria = st.selectbox("Categoría", ["Cadetería / Fletes", "Impuestos / AFIP", "Compra de Mercadería", "Insumos de Taller", "Otros"])
             proveedor = st.text_input("Proveedor o Destinatario (Ej: Icepar, Juan Cadete)")
