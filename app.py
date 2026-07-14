@@ -763,3 +763,54 @@ if busqueda:
             st.info("No encontré resultados.")
     else:
         st.warning("El catálogo seleccionado está vacío en el Excel.")
+
+st.divider()
+st.subheader("📦 Gestión de Inventario y Stock")
+
+with st.expander("Abrir panel para ingresar mercadería"):
+    with st.form("form_stock", clear_on_submit=False):
+        st.write("📝 **Carga de repuestos e insumos nuevos**")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            categoria_stock = st.selectbox("Categoría", ["Kits de Embrague", "Forros IAR Metal", "Crapodinas", "Distribución", "Frenos", "Otros"])
+            detalle_stock = st.text_input("Detalle del Artículo (Ej: Kit Sachs VW Gol)")
+            
+        with col2:
+            cantidad_stock = st.number_input("Cantidad a ingresar", min_value=1, step=1)
+            costo_stock = st.number_input("Costo Unitario ($)", min_value=0, step=1000)
+            
+        submit_stock = st.form_submit_button("📥 Guardar en Estantería")
+        
+        if submit_stock:
+            if detalle_stock != "" and costo_stock > 0:
+                # Armamos el paquete exacto de 4 datos
+                datos_stock = [categoria_stock, detalle_stock, cantidad_stock, costo_stock]
+                
+                try:
+                    # 1. Leemos la hoja de Stock fresca
+                    df_stock = conn.read(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", ttl=0)
+                    
+                    # 2. BLINDAJE: Nuestras 4 columnas obligatorias
+                    columnas_estrictas_stock = ["Categoria", "Detalle_Articulo", "Cantidad", "Costo_Unitario"]
+                    
+                    # 3. Armamos la fila
+                    nueva_fila_stock = pd.DataFrame([datos_stock], columns=columnas_estrictas_stock)
+                    
+                    # 4. Limpiamos la basura de Google Sheets
+                    if df_stock.empty:
+                        df_stock = pd.DataFrame(columns=columnas_estrictas_stock)
+                    else:
+                        df_stock = df_stock[columnas_estrictas_stock]
+                    
+                    # 5. Unimos y mandamos al Excel
+                    df_actualizado_stock = pd.concat([df_stock, nueva_fila_stock], ignore_index=True)
+                    conn.update(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", data=df_actualizado_stock)
+                    
+                    st.cache_data.clear()
+                    st.success(f"✅ ¡Entró al stock! {cantidad_stock}x {detalle_stock}.")
+                    
+                except Exception as e:
+                    st.error(f"⚠️ Error al guardar el stock: {e}")
+            else:
+                st.warning("⚠️ Escribí el detalle del repuesto y asegurate que el costo sea mayor a $0.")
