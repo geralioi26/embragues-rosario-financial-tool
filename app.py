@@ -661,7 +661,7 @@ st.divider()
 st.subheader("💸 Gestión de Gastos e Inversiones")
 
 with st.expander("Abrir panel para registrar una salida de dinero"):
-    with st.form("form_gastos", clear_on_submit=True):
+    with st.form("form_gastos", clear_on_submit=False):
         col1, col2 = st.columns(2)
         
         with col1:
@@ -686,19 +686,29 @@ with st.expander("Abrir panel para registrar una salida de dinero"):
                 datos_gasto = [fecha_str, clasificacion, categoria, detalle, monto, estado_pago, proveedor]
                 
                 try:
-                    # 1. Leemos cómo está la hoja de Gastos AHORA (sin caché, datos frescos)
+                    # 1. Leemos cómo está la hoja de Gastos AHORA
                     df_gastos = conn.read(spreadsheet=SHEET_URL, worksheet="Gastos", ttl=0)
                     
-                    # 2. Armamos la nueva fila asegurando que las columnas coincidan
-                    nueva_fila = pd.DataFrame([datos_gasto], columns=df_gastos.columns)
+                    # 2. BLINDAJE: Le dictamos a la fuerza los nombres exactos de nuestras 7 columnas
+                    columnas_estrictas = ["Fecha", "Clasificacion", "Categoria", "Detalle", "Monto $", "Estado_Pago", "Proveedor"]
                     
-                    # 3. Pegamos la fila nueva abajo de todo
+                    # 3. Armamos la nueva fila usando solo esas 7 columnas
+                    nueva_fila = pd.DataFrame([datos_gasto], columns=columnas_estrictas)
+                    
+                    # 4. Si la hoja del Excel estaba vacía, la obligamos a usar nuestra estructura
+                    if df_gastos.empty:
+                        df_gastos = pd.DataFrame(columns=columnas_estrictas)
+                    else:
+                        # Si tenía algo, forzamos a que solo mire nuestras 7 columnas y borre la basura fantasma
+                        df_gastos = df_gastos[columnas_estrictas]
+                    
+                    # 5. Pegamos la fila nueva abajo de todo
                     df_actualizado = pd.concat([df_gastos, nueva_fila], ignore_index=True)
                     
-                    # 4. Inyectamos el bloque blindado de vuelta al Excel
+                    # 6. Inyectamos de vuelta al Excel
                     conn.update(spreadsheet=SHEET_URL, worksheet="Gastos", data=df_actualizado)
                     
-                    # Limpiamos la memoria para que el sistema reconozca el cambio al instante
+                    # Limpiamos la memoria
                     st.cache_data.clear()
                     
                     st.success(f"✅ ¡Gasto registrado con éxito! {detalle} por ${monto}.")
