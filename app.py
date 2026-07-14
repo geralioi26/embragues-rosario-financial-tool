@@ -579,7 +579,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
             df_deudas = df_ventas[df_ventas['Estado_Cobro'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
             
             if not df_deudas.empty:
-                
                 # Usamos la columna exacta que validamos en tu Excel
                 col_monto = 'Venta $'
                 
@@ -596,7 +595,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 
                 # Seleccionamos solo las columnas útiles para el reclamo
                 cols_mostrar = ['Fecha', 'Cliente', 'Vehículo', 'Detalle', col_monto]
-                # Aseguramos que existan para no tirar errores
                 cols_finales = [c for c in cols_mostrar if c in df_deudas.columns]
                 
                 df_detalle = df_deudas[cols_finales].copy()
@@ -605,10 +603,25 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 # Mostramos la tabla lista para leer
                 st.dataframe(df_detalle.style.format({col_monto: '${:,.0f}'}), hide_index=True, use_container_width=True)
                 
-            else:
-                st.success("No hay deudas de clientes registradas. ¡Están todos al día!")
+                st.divider()
                 
-            st.divider()
+                # 3. PANEL DE COBRO MULTISELECCIÓN (Integrado y alineado)
+                opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
+                seleccion = st.multiselect("Seleccioná la o las deudas a cobrar (podés elegir varias):", opciones.tolist())
+                
+                if st.button("💰 Registrar Cobro(s)"):
+                    if seleccion:
+                        for sel in seleccion:
+                            fecha_sel = sel.split(" | ")[0]
+                            cliente_sel = sel.split(" | ")[1]
+                            saldar_deuda(fecha_sel, cliente_sel, "Cliente")
+                        st.success(f"✅ {len(seleccion)} cobro(s) registrado(s). El Excel se actualizó a 'Pagado'.")
+                    else:
+                        st.warning("⚠️ Seleccioná al menos una deuda para cobrar.")
+                        
+            else:
+                st.success("✅ No hay deudas de clientes registradas. ¡Están todos al día!")
+                st.divider()
                 
                 # MULTISELECT
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
