@@ -893,12 +893,16 @@ with st.expander("Abrir panel para actualizar Catálogo de Kits"):
                     col_codigo = f"Codigo_{marca_cat}"
                     col_precio = f"Precio_{marca_cat}"
                     
+                    # BLINDAJE DE FORMATO: "Ablandamos" las columnas para que acepten tanto letras como números
+                    df_kits[col_codigo] = df_kits[col_codigo].astype(object)
+                    df_kits[col_precio] = df_kits[col_precio].astype(object)
+                    
                     if mask.any():
                         # EL AUTO EXISTE: Actualizamos solo la celda de esa marca
                         idx = df_kits[mask].index[0]
                         df_kits.at[idx, col_codigo] = codigo_cat
                         df_kits.at[idx, col_precio] = precio_cat
-                        if proveedor_cat != "": # Si pusiste un proveedor nuevo, lo pisa. Si no, lo deja intacto.
+                        if proveedor_cat != "": # Si pusiste un proveedor nuevo, lo pisa
                             df_kits.at[idx, "Proveedor"] = proveedor_cat
                         accion_msj = "actualizado"
                     else:
