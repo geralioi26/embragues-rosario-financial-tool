@@ -831,3 +831,99 @@ with st.expander("Abrir panel para ingresar mercadería"):
                     st.error(f"⚠️ Error al guardar el stock: {e}")
             else:
                 st.warning("⚠️ Asegurate de escribir al menos el Vehículo o el Código, y que el costo en pesos sea mayor a $0.")
+
+st.divider()
+st.subheader("🔄 Actualización de Catálogos (Precios y Códigos)")
+
+with st.expander("Abrir panel para actualizar Catálogo de Kits"):
+    with st.form("form_actualizar_kits", clear_on_submit=False):
+        st.write("📝 **Modificar o agregar precios de Kits de Embrague**")
+        
+        # Fila 1: Identificación del vehículo
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            vehiculo_cat = st.text_input("Vehículo exacto (Ej: Peugeot 307)")
+        with col2:
+            motor_cat = st.text_input("Motor (Ej: 2.0)")
+        with col3:
+            proveedor_cat = st.text_input("Proveedor (Opcional, Ej: Fiol)")
+            
+        # Fila 2: Los datos nuevos a inyectar
+        col4, col5, col6 = st.columns(3)
+        with col4:
+            marca_cat = st.selectbox("¿Qué marca vas a actualizar?", ["LUK", "SACHS", "VALEO", "PHC_valeo", "ORIGINAL", "OTRA"])
+        with col5:
+            codigo_cat = st.text_input("Nuevo Código")
+        with col6:
+            precio_cat = st.number_input("Nuevo Precio Base ($)", min_value=0, step=1000)
+            
+        submit_cat_kits = st.form_submit_button("💾 Actualizar Catálogo de Kits")
+        
+        if submit_cat_kits:
+            if vehiculo_cat != "" and precio_cat > 0:
+                try:
+                    # 1. Leemos el Catálogo fresco
+                    df_kits = conn.read(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", ttl=0)
+                    
+                    # 2. BLINDAJE: Las 15 columnas exactas de tu Excel
+                    columnas_kits = [
+                        "Vehiculo", "Motor", "Proveedor", 
+                        "Codigo_LUK", "Precio_LUK", "Codigo_SACHS", "Precio_SACHS", 
+                        "Codigo_VALEO", "Precio_VALEO", "Codigo_PHC_valeo", "Precio_PHC_valeo", 
+                        "Codigo_ORIGINAL", "Precio_ORIGINAL", "Codigo_OTRA", "Precio_OTRA"
+                    ]
+                    
+                    # Forzamos la estructura por si Google Sheets mete basura
+                    if df_kits.empty:
+                        df_kits = pd.DataFrame(columns=columnas_kits)
+                    else:
+                        df_kits = df_kits[columnas_kits]
+                    
+                    # 3. Normalizamos textos para buscar coincidencias exactas (sin importar mayúsculas)
+                    df_kits['Veh_norm'] = df_kits['Vehiculo'].astype(str).str.strip().str.lower()
+                    df_kits['Mot_norm'] = df_kits['Motor'].astype(str).str.strip().str.lower()
+                    
+                    veh_buscar = vehiculo_cat.strip().lower()
+                    mot_buscar = motor_cat.strip().lower()
+                    
+                    # Buscamos si la fila ya existe
+                    mask = (df_kits['Veh_norm'] == veh_buscar) & (df_kits['Mot_norm'] == mot_buscar)
+                    
+                    # Armamos los nombres de las columnas a tocar
+                    col_codigo = f"Codigo_{marca_cat}"
+                    col_precio = f"Precio_{marca_cat}"
+                    
+                    if mask.any():
+                        # EL AUTO EXISTE: Actualizamos solo la celda de esa marca
+                        idx = df_kits[mask].index[0]
+                        df_kits.at[idx, col_codigo] = codigo_cat
+                        df_kits.at[idx, col_precio] = precio_cat
+                        if proveedor_cat != "": # Si pusiste un proveedor nuevo, lo pisa. Si no, lo deja intacto.
+                            df_kits.at[idx, "Proveedor"] = proveedor_cat
+                        accion_msj = "actualizado"
+                    else:
+                        # EL AUTO NO EXISTE: Creamos la fila nueva en blanco y llenamos solo lo necesario
+                        nueva_fila = {col: "" for col in columnas_kits}
+                        nueva_fila["Vehiculo"] = vehiculo_cat
+                        nueva_fila["Motor"] = motor_cat
+                        nueva_fila["Proveedor"] = proveedor_cat
+                        nueva_fila[col_codigo] = codigo_cat
+                        nueva_fila[col_precio] = precio_cat
+                        
+                        df_nueva = pd.DataFrame([nueva_fila])
+                        df_kits = pd.concat([df_kits, df_nueva], ignore_index=True)
+                        accion_msj = "creado"
+                    
+                    # 4. Limpiamos las columnas de búsqueda antes de guardar
+                    df_kits = df_kits.drop(columns=['Veh_norm', 'Mot_norm'])
+                    
+                    # 5. Inyectamos los pesos y códigos en el Excel
+                    conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", data=df_kits)
+                    
+                    st.cache_data.clear()
+                    st.success(f"✅ ¡Catálogo {accion_msj} con éxito! {vehiculo_cat} {motor_cat} | {marca_cat}: ${precio_cat}")
+                    
+                except Exception as e:
+                    st.error(f"⚠️ Error al actualizar el catálogo: {e}")
+            else:
+                st.warning("⚠️ El vehículo no puede estar vacío y el precio en pesos debe ser mayor a $0.")
