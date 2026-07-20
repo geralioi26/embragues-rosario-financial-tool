@@ -810,7 +810,7 @@ with st.expander("Abrir panel para ingresar mercadería"):
         # Fila 1: Categoría, Vehículo y Motor
         col1, col2, col3 = st.columns(3)
         with col1:
-            categoria_stock = st.selectbox("Categoría", ["Kits de Embrague", "Forros IAR Metal", "Crapodinas", "Distribución", "Frenos", "Otros"])
+            categoria_stock = st.selectbox("Categoría", ["Kits de Embrague", "Forros", "Crapodinas", "Distribución", "Frenos", "Otros"])
         with col2:
             vehiculo_stock = st.text_input("Vehículo (Ej: Gol Power)")
         with col3:
