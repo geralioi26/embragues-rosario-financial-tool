@@ -238,8 +238,27 @@ elif "Reparación" in tipo_item:
     crap_costo = st.sidebar.number_input("Costo de Crapodina ($):", min_value=0, value=0, key=f"crapcost_{fk}")
     tipo_crap = st.sidebar.selectbox("⚙️ Tipo de Crapodina:", ["Hidráulica","Mecánica"], key=f"tipocrap_{fk}")
     m_forros = st.sidebar.selectbox("Marca de Forros:", ["IAR Metal","Fras-le","Termolite","Otro"], key=f"mforro_{fk}")
-    forros_codigo = st.sidebar.text_input("Código de Forros:", "", key=f"forrocod_{fk}")
-    forros_costo = st.sidebar.number_input("Costo de Forros ($):", min_value=0, value=0, key=f"forrocost_{fk}")
+    
+    # --- INICIO LÓGICA FORROS COMBINADOS ---
+    forros_combinados = st.sidebar.checkbox("¿Forros combinados (distinto espesor)?", key=f"fcomb_{fk}")
+    
+    if forros_combinados:
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            cod1 = st.sidebar.text_input("Código 1:", key=f"fcod1_{fk}")
+        with col2:
+            cod2 = st.sidebar.text_input("Código 2:", key=f"fcod2_{fk}")
+        
+        # Unimos los códigos con una barra. El Excel lo lee perfecto y la función de stock también.
+        if cod1 and cod2:
+            forros_codigo = f"{cod1} | {cod2}"
+        else:
+            forros_codigo = "" 
+    else:
+        forros_codigo = st.sidebar.text_input("Código de Forros (2 iguales):", "", key=f"forrocod_{fk}")
+        
+    forros_costo = st.sidebar.number_input("Costo Total de Forros ($):", min_value=0, value=0, key=f"forrocost_{fk}")
+    # --- FIN LÓGICA FORROS COMBINADOS ---
     m_neg = [f"*{m}*" for m in m_crap]
     t_m = (", ".join(m_neg[:-1]) + " o " + m_neg[-1]) if len(m_neg) > 1 else (m_neg[0] if m_neg else "*primera marca*")
     sugerencia = f"reparado completo placa disco con forros originales volante rectificado y balanceado con crapodina {t_m}"
