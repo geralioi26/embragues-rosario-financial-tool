@@ -660,7 +660,7 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 seleccion = st.multiselect("Seleccioná la o las deudas a pagar (podés elegir varias):", opciones.tolist())
                 
                if st.button("💸 Registrar Pago(s)"):
-                    if seleccion:
+                   if seleccion:
                         try:
                             # 1. Leemos TODA la planilla de ventas una sola vez
                             df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
