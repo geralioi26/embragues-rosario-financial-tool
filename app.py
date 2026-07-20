@@ -731,44 +731,38 @@ with st.expander("Abrir panel para registrar una salida de dinero"):
             detalle = st.text_input("Detalle exacto (¿Qué se pagó?)")
             monto = st.number_input("Monto ($)", min_value=0, step=1000)
             estado_pago = st.selectbox("Estado del Pago", ["Pagado (Contado/Transf)", "Cuenta Corriente"])
+            # Agregamos el selector de forma de pago del gasto
+            forma_pago_gasto = st.selectbox("Forma de Pago", ["Efectivo", "Transferencia", "Aún no pagado"])
             
         submit_gasto = st.form_submit_button("💾 Guardar Registro")
         
         if submit_gasto:
             if monto > 0 and detalle != "":
-                # Formateamos la fecha al estilo argentino
                 fecha_str = fecha_gasto.strftime("%d/%m/%Y")
                 
-                # Armamos el paquete de datos exacto para tu Excel
-                datos_gasto = [fecha_str, clasificacion, categoria, detalle, monto, estado_pago, proveedor]
+                # Sumamos la forma de pago al final del paquete de datos
+                datos_gasto = [fecha_str, clasificacion, categoria, detalle, monto, estado_pago, proveedor, forma_pago_gasto]
                 
                 try:
-                    # 1. Leemos cómo está la hoja de Gastos AHORA
                     df_gastos = conn.read(spreadsheet=SHEET_URL, worksheet="Gastos", ttl=0)
                     
-                    # 2. BLINDAJE: Le dictamos a la fuerza los nombres exactos de nuestras 7 columnas
-                    columnas_estrictas = ["Fecha", "Clasificacion", "Categoria", "Detalle", "Monto $", "Estado_Pago", "Proveedor"]
+                    # ACTUALIZAMOS LAS COLUMNAS ESTRICTAS (Ahora son 8)
+                    columnas_estrictas = ["Fecha", "Clasificacion", "Categoria", "Detalle", "Monto $", "Estado_Pago", "Proveedor", "Forma_de_pago"]
                     
-                    # 3. Armamos la nueva fila usando solo esas 7 columnas
                     nueva_fila = pd.DataFrame([datos_gasto], columns=columnas_estrictas)
                     
-                    # 4. Si la hoja del Excel estaba vacía, la obligamos a usar nuestra estructura
                     if df_gastos.empty:
                         df_gastos = pd.DataFrame(columns=columnas_estrictas)
                     else:
-                        # Si tenía algo, forzamos a que solo mire nuestras 7 columnas y borre la basura fantasma
+                        # Si tu hoja vieja de gastos no tiene la columna Forma_de_pago, se la agregamos en blanco para que no falle
+                        if "Forma_de_pago" not in df_gastos.columns:
+                            df_gastos["Forma_de_pago"] = ""
                         df_gastos = df_gastos[columnas_estrictas]
                     
-                    # 5. Pegamos la fila nueva abajo de todo
                     df_actualizado = pd.concat([df_gastos, nueva_fila], ignore_index=True)
-                    
-                    # 6. Inyectamos de vuelta al Excel
                     conn.update(spreadsheet=SHEET_URL, worksheet="Gastos", data=df_actualizado)
-                    
-                    # Limpiamos la memoria
                     st.cache_data.clear()
-                    
-                    st.success(f"✅ ¡Gasto registrado con éxito! {detalle} por ${monto}.")
+                    st.success(f"✅ ¡Gasto registrado con éxito! {detalle} por ${monto:,.0f} en {forma_pago_gasto}.")
                     
                 except Exception as e:
                     st.error(f"⚠️ Error al inyectar los datos en el Excel: {e}")
