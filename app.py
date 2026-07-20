@@ -603,11 +603,29 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 
                 if st.button("💰 Registrar Cobro(s)"):
                     if seleccion:
-                        for sel in seleccion:
-                            fecha_sel = sel.split(" | ")[0]
-                            cliente_sel = sel.split(" | ")[1]
-                            saldar_deuda(fecha_sel, cliente_sel, "Cliente")
-                        st.success(f"✅ {len(seleccion)} cobro(s) registrado(s). El Excel se actualizó a 'Pagado'.")
+                        try:
+                            # 1. Leemos TODA la planilla de ventas una sola vez
+                            df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
+                            
+                            # 2. Modificamos todo en la memoria (súper rápido)
+                            for sel in seleccion:
+                                fecha_sel = sel.split(" | ")[0]
+                                cliente_sel = sel.split(" | ")[1]
+                                vehiculo_sel = sel.split(" | ")[2]
+                                
+                                # Buscamos la fila exacta y le cambiamos el estado
+                                mascara = (df_ventas_actual['Fecha'].astype(str) == fecha_sel) & \
+                                          (df_ventas_actual['Cliente'].astype(str) == cliente_sel) & \
+                                          (df_ventas_actual['Vehículo'].astype(str) == vehiculo_sel)
+                                df_ventas_actual.loc[mascara, 'Estado_Cobro'] = 'Pagado'
+                                
+                            # 3. Subimos el paquete entero a Google en un solo viaje
+                            conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_ventas_actual)
+                            st.cache_data.clear()
+                            
+                            st.success(f"✅ {len(seleccion)} cobro(s) registrado(s) en un solo paso. Excel actualizado.")
+                        except Exception as e:
+                            st.error(f"⚠️ Error al actualizar cobros: {e}")
                     else:
                         st.warning("⚠️ Seleccioná al menos una deuda para cobrar.")
             else:
@@ -641,13 +659,31 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Proveedor'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
                 seleccion = st.multiselect("Seleccioná la o las deudas a pagar (podés elegir varias):", opciones.tolist())
                 
-                if st.button("💸 Registrar Pago(s)"):
+               if st.button("💸 Registrar Pago(s)"):
                     if seleccion:
-                        for sel in seleccion:
-                            fecha_sel = sel.split(" | ")[0]
-                            prov_sel = sel.split(" | ")[1]
-                            saldar_deuda(fecha_sel, prov_sel, "Proveedor")
-                        st.success(f"✅ {len(seleccion)} pago(s) registrado(s). El Excel se actualizó a 'Pagado'.")
+                        try:
+                            # 1. Leemos TODA la planilla de ventas una sola vez
+                            df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
+                            
+                            # 2. Modificamos todo en la memoria
+                            for sel in seleccion:
+                                fecha_sel = sel.split(" | ")[0]
+                                prov_sel = sel.split(" | ")[1]
+                                vehiculo_sel = sel.split(" | ")[2]
+                                
+                                # Buscamos la fila exacta y le cambiamos el estado
+                                mascara = (df_ventas_actual['Fecha'].astype(str) == fecha_sel) & \
+                                          (df_ventas_actual['Proveedor'].astype(str) == prov_sel) & \
+                                          (df_ventas_actual['Vehículo'].astype(str) == vehiculo_sel)
+                                df_ventas_actual.loc[mascara, 'Estado_Pago_Prov'] = 'Pagado'
+                                
+                            # 3. Subimos el paquete entero a Google en un solo viaje
+                            conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_ventas_actual)
+                            st.cache_data.clear()
+                            
+                            st.success(f"✅ {len(seleccion)} pago(s) registrado(s) en un solo paso. Excel actualizado.")
+                        except Exception as e:
+                            st.error(f"⚠️ Error al actualizar pagos: {e}")
                     else:
                         st.warning("⚠️ Seleccioná al menos una deuda para pagar.")
             else:
