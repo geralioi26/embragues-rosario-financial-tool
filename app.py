@@ -181,7 +181,7 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
     except Exception as e:
         st.error(f"Falla al guardar en Crapodinas: {e}")
 
-def descontar_stock(codigo, cantidad_a_restar):
+def descontar_stock(código, cantidad_a_restar):
     # Si no hay código (ej: el campo quedó vacío en el formulario), no hace nada
     if not codigo or str(codigo).strip() == "":
         return
