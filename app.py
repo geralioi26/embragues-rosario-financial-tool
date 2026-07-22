@@ -924,7 +924,7 @@ try:
                 return [''] * len(fila)
             
             # Aplicamos tu regla de color y el formato de pesos al costo
-            df_estilizado = df_filtrado.style.apply(resaltar_critico, axis=1).format({'Costo_Unitario': '${:,.0f}'})
+            df_estilizado = df_filtrado.style.apply(resaltar_critico, axis=1).format({'Costo_Unitario': '${:,.0f}', 'Cantidad': '{:.0f}'})
             
             # Mostramos la tabla impecable en pantalla
             st.dataframe(df_estilizado, hide_index=True, use_container_width=True)
