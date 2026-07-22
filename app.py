@@ -190,8 +190,9 @@ def descontar_stock(codigo, cantidad_a_restar):
         # Lee la hoja de inventario fresca
         df_stock = leer_fresca(SHEET_URL, "Inventario_Stock")
         
-        # Busca la fila donde la columna 'Codigo' coincida exactamente
-        filtro = df_stock['Codigo'] == codigo.strip()
+        # BLINDAJE: Forzamos que toda la columna 'Codigo' del Excel se lea como texto.
+        # Así un "500092411" numérico se convierte en texto y coincide perfecto.
+        filtro = df_stock['Codigo'].astype(str).str.strip() == str(codigo).strip()
         
         if filtro.any():
             # Extrae el número de fila y la cantidad actual
