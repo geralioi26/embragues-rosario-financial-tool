@@ -187,11 +187,13 @@ def descontar_stock(codigo, cantidad_a_restar):
         return
         
     try:
-        # Lee la hoja de inventario fresca
+        # BLINDAJE DE MEMORIA 1: Borramos el caché justo antes de leer para asegurar stock real
+        st.cache_data.clear()
+        
+        # Lee la hoja de inventario fresca (ahora sí, 100% real)
         df_stock = leer_fresca(SHEET_URL, "Inventario_Stock")
         
-        # BLINDAJE: Forzamos que toda la columna 'Codigo' del Excel se lea como texto.
-        # Así un "500092411" numérico se convierte en texto y coincide perfecto.
+        # Filtro con la corrección de tildes que ya aplicamos
         filtro = df_stock['Código'].astype(str).str.strip() == str(codigo).strip()
         
         if filtro.any():
@@ -205,6 +207,10 @@ def descontar_stock(codigo, cantidad_a_restar):
             
             # Sube el cambio al Excel
             conn.update(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", data=df_stock)
+            
+            # BLINDAJE DE MEMORIA 2: Borramos el caché apenas terminamos de escribir 
+            # para que el próximo repuesto a descontar lea la resta que acabamos de hacer
+            st.cache_data.clear()
         else:
             st.warning(f"Atención: El repuesto código '{codigo}' no se encontró en el inventario.")
             
