@@ -902,6 +902,44 @@ if busqueda:
 st.divider()
 st.subheader("📦 Gestión de Inventario y Stock")
 
+# --- TABLERO INTELIGENTE DE INVENTARIO ---
+categoria_ver = st.selectbox("¿Qué categoría querés revisar?", 
+    ["Kits de Embrague", "Forros", "Crapodinas", "Distribución", "Conjuntos de Embrague", "Volantes Bimasa", "Frenos", "Otros"])
+
+try:
+    df_stock_total = leer_fresca(SHEET_URL, "Inventario_Stock")
+    
+    if not df_stock_total.empty:
+        # Filtramos solo lo que elegiste ver y hacemos una copia segura
+        df_filtrado = df_stock_total[df_stock_total['Categoria'].astype(str).str.strip() == categoria_ver].copy()
+        
+        if not df_filtrado.empty:
+            # Aseguramos que la cantidad sea un número para que no falle la matemática
+            df_filtrado['Cantidad'] = pd.to_numeric(df_filtrado['Cantidad'], errors='coerce').fillna(0)
+            
+            # REGLA VISUAL DE COLOR: Pinta toda la fila si queda 1 o 0
+            def resaltar_critico(fila):
+                if fila['Cantidad'] <= 1:
+                    return ['background-color: #ffe6e6; color: #900000; font-weight: bold'] * len(fila)
+                return [''] * len(fila)
+            
+            # Aplicamos tu regla de color y el formato de pesos al costo
+            df_estilizado = df_filtrado.style.apply(resaltar_critico, axis=1).format({'Costo_Unitario': '${:,.0f}'})
+            
+            # Mostramos la tabla impecable en pantalla
+            st.dataframe(df_estilizado, hide_index=True, use_container_width=True)
+            
+        else:
+            st.info(f"Todavía no hay mercadería cargada en la categoría '{categoria_ver}'.")
+    else:
+        st.info("El galpón está vacío. No hay stock registrado en el sistema.")
+        
+except Exception as e:
+    st.error(f"Falla al cargar el tablero de inventario: {e}")
+
+st.divider()
+# -----------------------------------------
+
 with st.expander("Abrir panel para ingresar mercadería"):
     with st.form("form_stock", clear_on_submit=False):
         st.write("📝 **Carga de repuestos e insumos nuevos**")
