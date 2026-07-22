@@ -181,7 +181,7 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
     except Exception as e:
         st.error(f"Falla al guardar en Crapodinas: {e}")
 
-def descontar_stock(código, cantidad_a_restar):
+def descontar_stock(codigo, cantidad_a_restar):
     # Si no hay código (ej: el campo quedó vacío en el formulario), no hace nada
     if not codigo or str(codigo).strip() == "":
         return
@@ -192,7 +192,7 @@ def descontar_stock(código, cantidad_a_restar):
         
         # BLINDAJE: Forzamos que toda la columna 'Codigo' del Excel se lea como texto.
         # Así un "500092411" numérico se convierte en texto y coincide perfecto.
-        filtro = df_stock['Codigo'].astype(str).str.strip() == str(codigo).strip()
+        filtro = df_stock['Código'].astype(str).str.strip() == str(codigo).strip()
         
         if filtro.any():
             # Extrae el número de fila y la cantidad actual
