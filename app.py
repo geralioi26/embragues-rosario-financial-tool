@@ -212,7 +212,8 @@ def descontar_stock(codigo, cantidad_a_restar):
 
 def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_bruto, monto_neto, costo, proveedor,
                       cod_kit, cod_crap, f_pago, e_cliente, e_prov, f_pago_prov,
-                      m_forros, c_forros, costo_f, ganancia):
+                      m_forros, c_forros, costo_f, ganancia,
+                      desc_kit, desc_crap, desc_forros): # <--- ACÁ RECIBIMOS LAS 3 ÓRDENES NUEVAS
                       
     fecha_hoy = (datetime.now() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
     
@@ -240,24 +241,24 @@ def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_
     leer_hoja.clear()
 
     # -------------------------------------------------------------
-    # GATILLO AUTOMÁTICO DE DESCUENTO DE STOCK
+    # GATILLO AUTOMÁTICO DE DESCUENTO DE STOCK (AHORA INTELIGENTE)
     # -------------------------------------------------------------
     
-    # 1. Descuento de Forros (Detecta la barra "|" de forros combinados)
-    if c_forros and str(c_forros).strip() != "":
+    # 1. Descuento de Forros (Fijate que ahora exige desc_forros == True)
+    if desc_forros and c_forros and str(c_forros).strip() != "":
         if "|" in str(c_forros):
             codigos = str(c_forros).split("|")
-            descontar_stock(codigos[0], 1)
-            descontar_stock(codigos[1], 1)
+            descontar_stock(codigos[0].strip(), 1)
+            descontar_stock(codigos[1].strip(), 1)
         else:
-            descontar_stock(c_forros, 2)
+            descontar_stock(str(c_forros).strip(), 2)
             
-    # 2. Descuento de Kit y Crapodina (si corresponde)
-    if cod_kit and str(cod_kit).strip() != "":
-        descontar_stock(cod_kit, 1)
+    # 2. Descuento de Kit y Crapodina (si corresponde y si está tildado)
+    if desc_kit and cod_kit and str(cod_kit).strip() != "":
+        descontar_stock(str(cod_kit).strip(), 1)
         
-    if cod_crap and str(cod_crap).strip() != "":
-        descontar_stock(cod_crap, 1)
+    if desc_crap and cod_crap and str(cod_crap).strip() != "":
+        descontar_stock(str(cod_crap).strip(), 1)
 
 # -------------------------------------------------------------
 if "form_key" not in st.session_state:
@@ -276,6 +277,11 @@ m_kit = m_forros = forros_codigo = crap_codigo = tipo_crap = ""
 forros_costo = crap_costo = 0
 m_crap = []
 
+# --- NUEVAS VARIABLES DE CONTROL DE STOCK (Arrancan apagadas) ---
+desc_kit = False
+desc_crap = False
+desc_forros = False
+
 tipo_item = st.sidebar.selectbox("Tipo de Trabajo:",
     ["Embrague Nuevo (Venta)", "Reparación de Embrague", "Rectificación de Volante", "Kit de Distribución", "Otro"], key=f"tipo_{fk}")
 
@@ -288,6 +294,11 @@ elif "Reparación" in tipo_item:
     m_crap = st.sidebar.multiselect("Marcas de Crapodina:", ["Luk","Skf","Ina","Dbh","The"], default=["Luk","Skf"], key=f"mcrap_{fk}")
     crap_codigo = st.sidebar.text_input("Código de Crapodina:", "", key=f"crapcod_{fk}")
     crap_costo = st.sidebar.number_input("Costo de Crapodina ($):", min_value=0, value=0, key=f"crapcost_{fk}")
+    
+    # --- CHECKBOX PARA CRAPODINA ---
+    if crap_codigo:
+        desc_crap = st.sidebar.checkbox("📉 Descontar Crapodina del Stock", value=True, key=f"desc_crap_{fk}")
+
     tipo_crap = st.sidebar.selectbox("⚙️ Tipo de Crapodina:", ["Hidráulica","Mecánica"], key=f"tipocrap_{fk}")
     m_forros = st.sidebar.selectbox("Marca de Forros:", ["IAR Metal","Fras-le","Termolite","Otro"], key=f"mforro_{fk}")
     
@@ -310,7 +321,12 @@ elif "Reparación" in tipo_item:
         forros_codigo = st.sidebar.text_input("Código de Forros (2 iguales):", "", key=f"forrocod_{fk}")
         
     forros_costo = st.sidebar.number_input("Costo Total de Forros ($):", min_value=0, value=0, key=f"forrocost_{fk}")
+    
+    # --- CHECKBOX PARA FORROS ---
+    if forros_codigo:
+        desc_forros = st.sidebar.checkbox("📉 Descontar Forros del Stock", value=True, key=f"desc_forros_{fk}")
     # --- FIN LÓGICA FORROS COMBINADOS ---
+    
     m_neg = [f"*{m}*" for m in m_crap]
     t_m = (", ".join(m_neg[:-1]) + " o " + m_neg[-1]) if len(m_neg) > 1 else (m_neg[0] if m_neg else "*primera marca*")
     sugerencia = f"reparado completo placa disco con forros originales volante rectificado y balanceado con crapodina {t_m}"
@@ -361,6 +377,10 @@ elif cat_f == "Rectificación":
 else:
     codigo_manual = st.sidebar.text_input("Código de repuesto:", "", key=f"codrep_{fk}")
     precio_compra = st.sidebar.number_input("Precio de COMPRA ($):", min_value=0, value=0, key=f"precomp_{fk}")
+    
+    # --- CHECKBOX PARA KIT/VENTA ---
+    if codigo_manual:
+        desc_kit = st.sidebar.checkbox("📉 Descontar Repuesto del Stock", value=True, key=f"desc_kit_{fk}")
 
 foto_repuesto = st.sidebar.file_uploader("📷 Foto del repuesto", type=["jpg","png","jpeg"], key=f"foto_{fk}")
 if foto_repuesto:
@@ -383,6 +403,7 @@ if estado_cliente == "Pagado":
         "Getnet - 1 Pago","Getnet - 3 Cuotas","Getnet - 6 Cuotas",
         "Más Pagos - 1 Pago","Más Pagos - 3 Cuotas","Más Pagos - 6 Cuotas",
         "Combinado","Otro"], key=f"fpago_{fk}")
+
 # CONDICIÓN: Ocultar pago a proveedor si es rectificación
 if tipo_item != "Rectificación de Volante":
     estado_p_prov = st.sidebar.selectbox("Estado al Proveedor:", ["Pagado","Cuenta Corriente","N/A"], index=0, key=f"estprov_{fk}")
@@ -409,13 +430,14 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
         elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_3))
         elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_6))
         
-        # Inyectamos nro_trabajo_input en la función (La rectificación ya va limpia acá)
+        # Le enviamos las 3 nuevas órdenes al motor de guardado
         guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
                   monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
                   cod_kit_final, cod_crap_final, f_pago_input,
                   estado_cliente, estado_p_prov,
-                  "",  # <--- ESTE ES EL DATO QUE FALTA PARA QUE NO EXPLOTE
-                  m_forros, forros_codigo, forros_costo, ganancia)
+                  "",  # Mantenemos el espacio vacío de la columna fantasma
+                  m_forros, forros_codigo, forros_costo, ganancia,
+                  desc_kit, desc_crap, desc_forros) # <--- ACÁ VIAJAN LAS 3 NUEVAS DECISIONES
                           
         if cod_kit_final and cat_f == "Venta":
             marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
