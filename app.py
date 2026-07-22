@@ -411,10 +411,11 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
         
         # Inyectamos nro_trabajo_input en la función (La rectificación ya va limpia acá)
         guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
-                          monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
-                          cod_kit_final, cod_crap_final, f_pago_input,
-                          estado_cliente, estado_p_prov,
-                          m_forros, forros_codigo, forros_costo, ganancia)
+                  monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
+                  cod_kit_final, cod_crap_final, f_pago_input,
+                  estado_cliente, estado_p_prov,
+                  "",  # <--- ESTE ES EL DATO QUE FALTA PARA QUE NO EXPLOTE
+                  m_forros, forros_codigo, forros_costo, ganancia)
                           
         if cod_kit_final and cat_f == "Venta":
             marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
