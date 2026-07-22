@@ -274,36 +274,35 @@ if "venta_exitosa" in st.session_state:
     st.sidebar.success(st.session_state["venta_exitosa"])
     del st.session_state["venta_exitosa"]
 
-m_kit = m_forros = forros_codigo = crap_codigo = tipo_crap = ""
-forros_costo = crap_costo = 0
+# Inicialización limpia de variables (Evita errores de variables indefinidas)
+m_kit = m_forros = forros_codigo = crap_codigo = tipo_crap = codigo_manual = cod_kit_final = cod_crap_final = ""
+forros_costo = crap_costo = precio_compra = 0
 m_crap = []
-
-# --- NUEVAS VARIABLES DE CONTROL DE STOCK (Arrancan apagadas) ---
-desc_kit = False
-desc_crap = False
-desc_forros = False
+desc_kit = desc_crap = desc_forros = False
 
 tipo_item = st.sidebar.selectbox("Tipo de Trabajo:",
-    ["Embrague Nuevo (Venta)", "Reparación de Embrague", "Rectificación de Volante", "Kit de Distribución", "Otro"], key=f"tipo_{fk}")
+    ["Embrague Nuevo (Venta)", "Reparación de Embrague", "Rectificación de Volante", "Kit de Distribución", "Repuesto Suelto", "Otro"], key=f"tipo_{fk}")
 
 if "Nuevo" in tipo_item:
     cat_f, icono, incl_rectif = "Venta", "⚙️", False
     m_kit = st.sidebar.selectbox("Marca del Kit:", ["LUK","SACHS","VALEO","PHC_VALEO","ORIGINAL","OTRA"], key=f"mkit_{fk}")
     sugerencia = f"KIT nuevo marca *{m_kit}*"
+    
 elif "Reparación" in tipo_item:
     cat_f, icono, incl_rectif = "Reparación", "🔧", True
-    m_crap = st.sidebar.multiselect("Marcas de Crapodina:", ["Luk","Skf","Ina","Dbh","The"], default=["Luk","Skf"], key=f"mcrap_{fk}")
-    crap_codigo = st.sidebar.text_input("Código de Crapodina:", "", key=f"crapcod_{fk}")
-    crap_costo = st.sidebar.number_input("Costo de Crapodina ($):", min_value=0, value=0, key=f"crapcost_{fk}")
     
-    # --- CHECKBOX PARA CRAPODINA ---
+    # --- BLOQUE CRAPODINA ORDENADO ---
+    m_crap = st.sidebar.multiselect("Marcas de Crapodina:", ["Luk","Skf","Ina","Dbh","The"], default=["Luk","Skf"], key=f"mcrap_{fk}")
+    tipo_crap = st.sidebar.selectbox("⚙️ Tipo de Crapodina:", ["Hidráulica","Mecánica"], key=f"tipocrap_{fk}")
+    crap_codigo = st.sidebar.text_input("Código de Crapodina:", "", key=f"crapcod_{fk}")
+    
     if crap_codigo:
         desc_crap = st.sidebar.checkbox("📉 Descontar Crapodina del Stock", value=True, key=f"desc_crap_{fk}")
-
-    tipo_crap = st.sidebar.selectbox("⚙️ Tipo de Crapodina:", ["Hidráulica","Mecánica"], key=f"tipocrap_{fk}")
-    m_forros = st.sidebar.selectbox("Marca de Forros:", ["IAR Metal","Fras-le","Termolite","Otro"], key=f"mforro_{fk}")
+        
+    crap_costo = st.sidebar.number_input("Costo de Crapodina ($):", min_value=0, value=0, key=f"crapcost_{fk}")
     
-    # --- INICIO LÓGICA FORROS COMBINADOS ---
+    # --- BLOQUE FORROS ---
+    m_forros = st.sidebar.selectbox("Marca de Forros:", ["IAR Metal","Fras-le","Termolite","Otro"], key=f"mforro_{fk}")
     forros_combinados = st.sidebar.checkbox("¿Forros combinados (distinto espesor)?", key=f"fcomb_{fk}")
     
     if forros_combinados:
@@ -312,33 +311,38 @@ elif "Reparación" in tipo_item:
             cod1 = st.sidebar.text_input("Código 1:", key=f"fcod1_{fk}")
         with col2:
             cod2 = st.sidebar.text_input("Código 2:", key=f"fcod2_{fk}")
-        
-        # Unimos los códigos con una barra. El Excel lo lee perfecto y la función de stock también.
-        if cod1 and cod2:
-            forros_codigo = f"{cod1} | {cod2}"
-        else:
-            forros_codigo = "" 
+        forros_codigo = f"{cod1} | {cod2}" if cod1 and cod2 else ""
     else:
         forros_codigo = st.sidebar.text_input("Código de Forros (2 iguales):", "", key=f"forrocod_{fk}")
         
-    forros_costo = st.sidebar.number_input("Costo Total de Forros ($):", min_value=0, value=0, key=f"forrocost_{fk}")
-    
-    # --- CHECKBOX PARA FORROS ---
     if forros_codigo:
         desc_forros = st.sidebar.checkbox("📉 Descontar Forros del Stock", value=True, key=f"desc_forros_{fk}")
-    # --- FIN LÓGICA FORROS COMBINADOS ---
+        
+    forros_costo = st.sidebar.number_input("Costo Total de Forros ($):", min_value=0, value=0, key=f"forrocost_{fk}")
     
     m_neg = [f"*{m}*" for m in m_crap]
     t_m = (", ".join(m_neg[:-1]) + " o " + m_neg[-1]) if len(m_neg) > 1 else (m_neg[0] if m_neg else "*primera marca*")
     sugerencia = f"reparado completo placa disco con forros originales volante rectificado y balanceado con crapodina {t_m}"
+
 elif "Rectificación" in tipo_item:
     cat_f, icono, incl_rectif = "Rectificación", "⚙️", True
     sugerencia = "Rectificación de volante"
-else:
+
+elif "Distribución" in tipo_item:
     cat_f, icono, incl_rectif = "Venta", "🛠️", False
     sugerencia = "KIT de distribución"
 
-# CONDICIÓN: Ocultar Nro de Trabajo si es Rectificación
+elif "Repuesto Suelto" in tipo_item:
+    cat_f, icono, incl_rectif = "Repuesto Suelto", "📦", False
+    detalle_suelto = st.sidebar.text_input("Detalle (Ej: Volante Bimasa Tiida):", key=f"detsuelto_{fk}")
+    marca_suelta = st.sidebar.text_input("Marca:", key=f"msuelta_{fk}")
+    sugerencia = f"{detalle_suelto} marca {marca_suelta}".strip()
+    
+else:
+    cat_f, icono, incl_rectif = "Otro", "📝", False
+    sugerencia = "Venta / Reparación"
+
+# --- CAMPOS GENERALES ---
 if tipo_item != "Rectificación de Volante":
     nro_trabajo_input = st.sidebar.text_input("Nro. de Trabajo (Ej: 168):", value="", key=f"nrotrabajo_{fk}")
 else:
@@ -348,15 +352,15 @@ monto_limpio = st.sidebar.number_input("Precio de VENTA ($):", min_value=0, valu
 vehiculo_input = st.sidebar.text_input("Vehículo:", value="", key=f"vehiculo_{fk}")
 motor_input = st.sidebar.text_input("Motor:", value="", key=f"motor_{fk}")
 
-# CONDICIÓN: Ocultar Proveedor si es Rectificación
 if tipo_item != "Rectificación de Volante":
     proveedor_input = st.sidebar.text_input("Proveedor:", value="", key=f"proveedor_{fk}")
 else:
     proveedor_input = "Taller Propio"
 
-# Ajuste del Detalle
 if tipo_item == "Rectificación de Volante":
     detalle_excel = st.sidebar.text_input("📝 Detalle para Excel:", value="Rectificación volante", key=f"detalle_{fk}")
+elif "Repuesto Suelto" in tipo_item:
+    detalle_excel = st.sidebar.text_input("📝 Detalle para Excel:", value="Venta Repuesto Suelto", key=f"detalle_{fk}")
 else:
     detalle_excel = st.sidebar.text_input("📝 Detalle para Excel:", value="Venta / Reparación", key=f"detalle_{fk}")
     
@@ -366,7 +370,7 @@ detalle_final = st.sidebar.text_area("💬 Detalle en WhatsApp:", value=sugerenc
 st.sidebar.divider()
 st.sidebar.write("📸 **Uso Interno**")
 
-# Lógica de costos según tipo
+# --- LÓGICA DE COSTOS Y STOCK INTEGRADA ---
 if cat_f == "Reparación":
     codigo_manual = crap_codigo
     precio_compra = crap_costo + forros_costo
@@ -376,10 +380,10 @@ elif cat_f == "Rectificación":
     precio_compra = 0
     st.sidebar.info("💰 Costo Materiales: $0 (Servicio Propio)")
 else:
+    # Esto engloba "Kit Nuevo", "Repuesto Suelto" y "Otro" usando la misma caja de texto unificada
     codigo_manual = st.sidebar.text_input("Código de repuesto:", "", key=f"codrep_{fk}")
     precio_compra = st.sidebar.number_input("Precio de COMPRA ($):", min_value=0, value=0, key=f"precomp_{fk}")
     
-    # --- CHECKBOX PARA KIT/VENTA ---
     if codigo_manual:
         desc_kit = st.sidebar.checkbox("📉 Descontar Repuesto del Stock", value=True, key=f"desc_kit_{fk}")
 
@@ -405,7 +409,6 @@ if estado_cliente == "Pagado":
         "Más Pagos - 1 Pago","Más Pagos - 3 Cuotas","Más Pagos - 6 Cuotas",
         "Combinado","Otro"], key=f"fpago_{fk}")
 
-# CONDICIÓN: Ocultar pago a proveedor si es rectificación
 if tipo_item != "Rectificación de Volante":
     estado_p_prov = st.sidebar.selectbox("Estado al Proveedor:", ["Pagado","Cuenta Corriente","N/A"], index=0, key=f"estprov_{fk}")
 else:
@@ -416,43 +419,42 @@ cod_crap_final = crap_codigo if cat_f == "Reparación" else ""
 
 if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
         
-        monto_bruto = monto_limpio
-        monto_neto_guardar = monto_limpio
-        
-        # Matemática quirúrgica para Links y POS
-        if f_pago_input in ["Efectivo", "Transferencia"]:
-            monto_neto_guardar = "-"
-        elif "Link" in f_pago_input: 
-            monto_bruto = int(round(monto_limpio / 0.9758))  # Descuento Getnet Plazo Estándar (2.42%)
-        elif f_pago_input == "Getnet - 1 Pago": monto_bruto = int(round(monto_limpio * GETNET_1))
-        elif f_pago_input == "Getnet - 3 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_3))
-        elif f_pago_input == "Getnet - 6 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_6))
-        elif f_pago_input == "Más Pagos - 1 Pago": monto_bruto = int(round(monto_limpio * MPAGOS_1))
-        elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_3))
-        elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_6))
-        
-        # Le enviamos las 3 nuevas órdenes al motor de guardado
-        guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
-                  monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
-                  cod_kit_final, cod_crap_final, f_pago_input,
-                  estado_cliente, estado_p_prov,
-                  "",  # Mantenemos el espacio vacío de la columna fantasma
-                  m_forros, forros_codigo, forros_costo, ganancia,
-                  desc_kit, desc_crap, desc_forros) # <--- ACÁ VIAJAN LAS 3 NUEVAS DECISIONES
-                          
-        if cod_kit_final and cat_f == "Venta":
-            marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
-            actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, precio_compra, marca_k, motor_input, proveedor_input)
-        if cod_crap_final and cat_f == "Reparación":
-            actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}",
-                                           cod_crap_final, crap_costo,
-                                           m_crap[0] if m_crap else "OTRA")
-                                           
-        st.session_state.form_key += 1
-        st.session_state["venta_exitosa"] = "✅ Venta registrada correctamente."
-        st.cache_data.clear()
-        st.rerun()
-
+    monto_bruto = monto_limpio
+    monto_neto_guardar = monto_limpio
+    
+    # Matemática quirúrgica para Links y POS
+    if f_pago_input in ["Efectivo", "Transferencia"]:
+        monto_neto_guardar = "-"
+    elif "Link" in f_pago_input: 
+        monto_bruto = int(round(monto_limpio / 0.9758))  # Descuento Getnet Plazo Estándar (2.42%)
+    elif f_pago_input == "Getnet - 1 Pago": monto_bruto = int(round(monto_limpio * GETNET_1))
+    elif f_pago_input == "Getnet - 3 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_3))
+    elif f_pago_input == "Getnet - 6 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_6))
+    elif f_pago_input == "Más Pagos - 1 Pago": monto_bruto = int(round(monto_limpio * MPAGOS_1))
+    elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_3))
+    elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_6))
+    
+    # Le enviamos las órdenes al motor de guardado
+    guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
+              monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
+              cod_kit_final, cod_crap_final, f_pago_input,
+              estado_cliente, estado_p_prov,
+              "",  # Mantenemos el espacio vacío de la columna fantasma
+              m_forros, forros_codigo, forros_costo, ganancia,
+              desc_kit, desc_crap, desc_forros)
+                      
+    if cod_kit_final and cat_f == "Venta":
+        marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
+        actualizar_catalogo_kits(vehiculo_input, "Kit de Embrague", cod_kit_final, precio_compra, marca_k, motor_input, proveedor_input)
+    if cod_crap_final and cat_f == "Reparación":
+        actualizar_catalogo_crapodinas(vehiculo_input, f"Crapodina {tipo_crap}",
+                                       cod_crap_final, crap_costo,
+                                       m_crap[0] if m_crap else "OTRA")
+                                       
+    st.session_state.form_key += 1
+    st.session_state["venta_exitosa"] = "✅ Venta registrada correctamente."
+    st.cache_data.clear()
+    st.rerun()
 # 8. CALCULADORA DE CUOTAS
 st.markdown("### 💳 Calculadora de Cuotas / Links")
 tipo_pos = st.radio("¿Qué vas a usar?", ["GETNET (Posnet)", "MÁS PAGOS (Posnet)", "LINK DE PAGO (Getnet)"], horizontal=True)
