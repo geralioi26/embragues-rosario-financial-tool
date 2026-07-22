@@ -181,31 +181,83 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
     except Exception as e:
         st.error(f"Falla al guardar en Crapodinas: {e}")
 
+def descontar_stock(codigo, cantidad_a_restar):
+    # Si no hay código (ej: el campo quedó vacío en el formulario), no hace nada
+    if not codigo or str(codigo).strip() == "":
+        return
+        
+    try:
+        # Lee la hoja de inventario fresca
+        df_stock = leer_fresca(SHEET_URL, "Inventario_Stock")
+        
+        # Busca la fila donde la columna 'Codigo' coincida exactamente
+        filtro = df_stock['Codigo'] == codigo.strip()
+        
+        if filtro.any():
+            # Extrae el número de fila y la cantidad actual
+            indice = df_stock.index[filtro].tolist()[0]
+            stock_actual = int(df_stock.at[indice, 'Cantidad'])
+            
+            # Hace la resta matemática
+            nuevo_stock = stock_actual - cantidad_a_restar
+            df_stock.at[indice, 'Cantidad'] = nuevo_stock
+            
+            # Sube el cambio al Excel
+            conn.update(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", data=df_stock)
+        else:
+            st.warning(f"Atención: El repuesto código '{codigo}' no se encontró en el inventario.")
+            
+    except Exception as e:
+        st.error(f"Error interno al descontar stock del código {codigo}: {e}")
+
 def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_bruto, monto_neto, costo, proveedor,
-                      cod_kit, cod_crap, f_pago, e_cliente, e_prov,
+                      cod_kit, cod_crap, f_pago, e_cliente, e_prov, f_pago_prov,
                       m_forros, c_forros, costo_f, ganancia):
+                      
     fecha_hoy = (datetime.now() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
     
-    # Agregamos "Nro_Trabajo" exactamente en la segunda posición
+    # Lista de columnas corregida (se agregó Forma_Pago_Prov donde corresponde)
     columnas = ["Fecha", "Nro_Trabajo", "Categoría", "Cliente", "Vehículo", "Detalle",
                 "Venta $", "Compra $", "Proveedor", "Código", "Cod_Crapodina",
-                "Forma_de_pago", "Estado_Cobro", "Estado_Pago_Prov",
+                "Forma_de_pago", "Estado_Cobro", "Estado_Pago_Prov", "Forma_Pago_Prov",
                 "Marca_Forros", "Cod_Forros", "Costo_Forros", "Ganancia", "Monto Neto Esperado"]
+                
     try:
         df_existente = leer_fresca(SHEET_URL, "Ventas")
     except Exception as e:
         st.error(f"Error al leer Ventas: {e}")
         st.stop()
         
-    # Inyectamos la variable nro_trabajo después de fecha_hoy
+    # Inyectamos la variable f_pago_prov en la nueva fila de datos
     nueva = pd.DataFrame([[fecha_hoy, nro_trabajo, categoria, cliente, vehiculo, detalle,
                            monto_bruto, costo, proveedor, cod_kit, cod_crap,
-                           f_pago, e_cliente, e_prov,
+                           f_pago, e_cliente, e_prov, f_pago_prov,
                            m_forros, c_forros, costo_f, ganancia, monto_neto]],
                          columns=columnas)
+                         
     df_nuevo = pd.concat([df_existente, nueva], ignore_index=True)
     conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_nuevo)
     leer_hoja.clear()
+
+    # -------------------------------------------------------------
+    # GATILLO AUTOMÁTICO DE DESCUENTO DE STOCK
+    # -------------------------------------------------------------
+    
+    # 1. Descuento de Forros (Detecta la barra "|" de forros combinados)
+    if c_forros and str(c_forros).strip() != "":
+        if "|" in str(c_forros):
+            codigos = str(c_forros).split("|")
+            descontar_stock(codigos[0], 1)
+            descontar_stock(codigos[1], 1)
+        else:
+            descontar_stock(c_forros, 2)
+            
+    # 2. Descuento de Kit y Crapodina (si corresponde)
+    if cod_kit and str(cod_kit).strip() != "":
+        descontar_stock(cod_kit, 1)
+        
+    if cod_crap and str(cod_crap).strip() != "":
+        descontar_stock(cod_crap, 1)
 
 # -------------------------------------------------------------
 if "form_key" not in st.session_state:
