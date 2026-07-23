@@ -998,7 +998,7 @@ with st.expander("Abrir panel para ingresar mercadería"):
                     float(nuevo_costo)
                 ]
                 
-               try:
+                try:
                     # Inyectamos en la pestaña Inventario_Stock
                     agregar_fila(SHEET_URL, "Inventario_Stock", fila_nueva)
                     st.cache_data.clear() # Limpiamos la memoria
