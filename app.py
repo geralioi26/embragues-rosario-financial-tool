@@ -1005,7 +1005,7 @@ with st.expander("Abrir panel para ingresar mercadería"):
                     st.success(f"✅ ¡Mercadería guardada! {nueva_cantidad}x {marca_final} ({nuevo_codigo}) ingresado correctamente.")
                 except Exception as e:
                     st.error(f"Falla al guardar en el Excel: {e}")
-            else:
+             else:
                 st.warning("⚠️ Asegurate de escribir al menos el Vehículo o el Código, y que el costo en pesos sea mayor a $0.")
 
 st.divider()
