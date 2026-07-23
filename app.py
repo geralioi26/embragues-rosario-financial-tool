@@ -1003,7 +1003,7 @@ with st.expander("Abrir panel para ingresar mercadería"):
                     agregar_fila(SHEET_URL, "Inventario_Stock", fila_nueva)
                     st.cache_data.clear() # Limpiamos la memoria
                     st.success(f"✅ ¡Mercadería guardada! {nueva_cantidad}x {marca_final} ({nuevo_codigo}) ingresado correctamente.")
-                 except Exception as e:
+                except Exception as e:
                     st.error(f"Falla al guardar en el Excel: {e}")
             else:
                 st.warning("⚠️ Asegurate de escribir al menos el Vehículo o el Código, y que el costo en pesos sea mayor a $0.")
