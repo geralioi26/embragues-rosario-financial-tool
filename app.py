@@ -999,8 +999,11 @@ with st.expander("Abrir panel para ingresar mercadería"):
                 ]
                 
                 try:
-                    # Inyectamos en la pestaña Inventario_Stock
-                    agregar_fila(SHEET_URL, "Inventario_Stock", fila_nueva)
+                    # Leemos el stock actual, agregamos la fila y volvemos a subir
+                    df_stock = conn.read(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", ttl=0)
+                    df_stock.loc[len(df_stock)] = fila_nueva
+                    conn.update(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", data=df_stock)
+                    
                     st.cache_data.clear() # Limpiamos la memoria
                     st.success(f"✅ ¡Mercadería guardada! {nueva_cantidad}x {marca_final} ({nuevo_codigo}) ingresado correctamente.")
                 except Exception as e:
