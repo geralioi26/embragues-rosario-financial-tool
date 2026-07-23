@@ -941,67 +941,70 @@ st.divider()
 # -----------------------------------------
 
 with st.expander("Abrir panel para ingresar mercadería"):
-    with st.form("form_stock", clear_on_submit=False):
-        st.write("📝 **Carga de repuestos e insumos nuevos**")
+    with st.form("form_nuevo_stock", clear_on_submit=True):
+        st.markdown("### 📥 Ingreso de Nueva Mercadería")
         
-        # Fila 1: Categoría, Vehículo y Motor
-        col1, col2, col3 = st.columns(3)
+        # 1. Categoría
+        nueva_categoria = st.selectbox("Categoría", [
+            "Kits de Embrague", 
+            "Conjuntos de Embrague", 
+            "Volantes Bimasa", 
+            "Crapodinas", 
+            "Forros", 
+            "Frenos", 
+            "Distribución", 
+            "Otros"
+        ])
+        
+        col1, col2 = st.columns(2)
+        
         with col1:
-            categoria_stock = st.selectbox("Categoría", ["Kits de Embrague", "Forros", "Crapodinas", "Distribución", "Frenos", "Otros"])
+            # 2. Marca (Desplegable blindado)
+            marca_opcion = st.selectbox("Marca", [
+                "Sachs", "LuK", "Valeo", "PHCValeo", "INA", 
+                "IAR Metal", "Termolite", "Frasle", "Otra..."
+            ])
+            # Campo de rescate por si elige "Otra..."
+            nueva_marca_otra = st.text_input("Si elegiste 'Otra...', escribila acá (Opcional)")
+            
+            # 3. Código
+            nuevo_codigo = st.text_input("Código exacto del repuesto")
+            
         with col2:
-            vehiculo_stock = st.text_input("Vehículo (Ej: Gol Power)")
-        with col3:
-            motor_stock = st.text_input("Motor (Ej: 1.6)")
+            # 4. Aplicación
+            nueva_aplicacion = st.text_input("Aplicación (Ej: Gol Power 1.6)")
+            # 5. Cantidad
+            nueva_cantidad = st.number_input("Cantidad", min_value=1, step=1)
             
-        # Fila 2: Marca, Código, Cantidad y Costo
-        col4, col5, col6, col7 = st.columns(4)
-        with col4:
-            marca_stock = st.text_input("Marca (Ej: Sachs, LUK, Valeo)")
-        with col5:
-            codigo_stock = st.text_input("Código de Fábrica")
-        with col6:
-            cantidad_stock = st.number_input("Cantidad a ingresar", min_value=1, step=1)
-        with col7:
-            costo_stock = st.number_input("Costo Unitario ($)", min_value=0, step=1000)
-            
-        submit_stock = st.form_submit_button("📥 Guardar en Estantería")
+        # 6. Costo Unitario en Pesos
+        nuevo_costo = st.number_input("Costo Unitario ($)", min_value=0.0, step=1000.0)
         
-        if submit_stock:
-            # Validamos que al menos haya puesto un vehículo o un código, y que el costo sea mayor a 0
-            if (vehiculo_stock != "" or codigo_stock != "") and costo_stock > 0:
-                
-                # Juntamos los textos para armar un detalle limpio
-                partes_detalle = [p.strip() for p in [vehiculo_stock, motor_stock, marca_stock, codigo_stock] if p.strip() != ""]
-                detalle_unido = " | ".join(partes_detalle)
-                
-                # Armamos el paquete exacto de 4 datos
-                datos_stock = [categoria_stock, detalle_unido, cantidad_stock, costo_stock]
+        btn_guardar_stock = st.form_submit_button("Guardar en Inventario")
+        
+        if btn_guardar_stock:
+            # Lógica para definir qué marca guardamos
+            marca_final = nueva_marca_otra.strip() if marca_opcion == "Otra..." else marca_opcion
+            
+            if not marca_final or not nuevo_codigo or not nueva_aplicacion:
+                st.warning("⚠️ Socio, completá Marca, Código y Aplicación para no ensuciar la base de datos.")
+            else:
+                # Armamos la fila exacta con las 6 columnas para el Excel
+                fila_nueva = [
+                    nueva_categoria,
+                    marca_final,
+                    nuevo_codigo.strip(),
+                    nueva_aplicacion.strip(),
+                    int(nueva_cantidad),
+                    float(nuevo_costo)
+                ]
                 
                 try:
-                    # 1. Leemos la hoja de Stock fresca
-                    df_stock = conn.read(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", ttl=0)
-                    
-                    # 2. BLINDAJE: Nuestras 4 columnas obligatorias
-                    columnas_estrictas_stock = ["Categoria", "Detalle_Articulo", "Cantidad", "Costo_Unitario"]
-                    
-                    # 3. Armamos la fila
-                    nueva_fila_stock = pd.DataFrame([datos_stock], columns=columnas_estrictas_stock)
-                    
-                    # 4. Limpiamos la basura de Google Sheets
-                    if df_stock.empty:
-                        df_stock = pd.DataFrame(columns=columnas_estrictas_stock)
-                    else:
-                        df_stock = df_stock[columnas_estrictas_stock]
-                    
-                    # 5. Unimos y mandamos al Excel
-                    df_actualizado_stock = pd.concat([df_stock, nueva_fila_stock], ignore_index=True)
-                    conn.update(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", data=df_actualizado_stock)
-                    
-                    st.cache_data.clear()
-                    st.success(f"✅ ¡Entró al stock! {cantidad_stock}x de: {detalle_unido}.")
-                    
+                    # Inyectamos en la pestaña Inventario_Stock
+                    agregar_fila(SHEET_URL, "Inventario_Stock", fila_nueva)
+                    st.cache_data.clear() # Limpiamos la memoria
+                    st.success(f"✅ ¡Mercadería guardada! {nueva_cantidad}x {marca_final} ({nuevo_codigo}) ingresado correctamente.")
                 except Exception as e:
-                    st.error(f"⚠️ Error al guardar el stock: {e}")
+                    st.error(f"Falla al guardar en el Excel: {e}")
             else:
                 st.warning("⚠️ Asegurate de escribir al menos el Vehículo o el Código, y que el costo en pesos sea mayor a $0.")
 
