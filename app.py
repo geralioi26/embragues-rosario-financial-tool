@@ -450,7 +450,8 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     if f_pago_input in ["Efectivo", "Transferencia"]:
         monto_neto_guardar = "-"
     elif "Link" in f_pago_input: 
-        monto_bruto = int(round(monto_limpio / 0.9758))  # Descuento Getnet Plazo Estándar (2.42%)
+        # Llama a la función global conectada al Excel
+        monto_bruto = int(calcular_link_pago(monto_limpio))
     elif f_pago_input == "Getnet - 1 Pago": monto_bruto = int(round(monto_limpio * GETNET_1))
     elif f_pago_input == "Getnet - 3 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_3))
     elif f_pago_input == "Getnet - 6 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_6))
@@ -487,8 +488,8 @@ if tipo_pos == "LINK DE PAGO (Getnet)":
     nombre_pos = "LINK GETNET"
     plan_link = st.selectbox("Plan de Cuotas para el Cliente:", ["Estándar Bancario", "Cuota Simple (MiPyME)"])
     
-    # Matemática quirúrgica: Descuento Getnet Plazo Estándar (2% arancel + 21% IVA = 2.42%) -> factor divisor 0.9758
-    monto_link = monto_limpio / 0.9758
+    # Matemática quirúrgica: Conectada a la función global (extrae el divisor directo del Excel)
+    monto_link = calcular_link_pago(monto_limpio)
     
     # Coeficientes según el plan que elija para el cliente
     if "Estándar" in plan_link:
