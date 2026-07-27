@@ -643,8 +643,22 @@ try:
             df_pagar = df_mes_actual[df_mes_actual['Estado_Pago_Prov'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
             deuda_prov = df_pagar['Compra $'].sum()
             
+            # --- CÁLCULO DE CAPITAL INMOVILIZADO (STOCK) ---
+            try:
+                # Usamos leer_fresca para asegurar que el dato de stock sea en tiempo real
+                df_stock = leer_fresca(SHEET_URL, "Inventario_Stock")
+                df_stock['Cantidad'] = pd.to_numeric(df_stock['Cantidad'], errors='coerce').fillna(0)
+                df_stock['Costo_Unitario'] = pd.to_numeric(df_stock['Costo_Unitario'], errors='coerce').fillna(0)
+                
+                # Multiplicamos cantidad por costo y sumamos el total
+                capital_inmovilizado = (df_stock['Cantidad'] * df_stock['Costo_Unitario']).sum()
+            except Exception:
+                capital_inmovilizado = 0
+
             # --- RENDERIZADO DEL TABLERO ---
             st.markdown("**💰 Radiografía Financiera (Realidad del Mes)**")
+            
+            # Fila 1: Dinero Circulante y Rentabilidad
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.metric(label="💵 Ganancia NETA (Bolsillo)", value=f"${neta_actual:,.0f}", delta=f"${diferencia_neta:,.0f} vs Mes Pasado")
@@ -652,6 +666,12 @@ try:
                 st.metric(label="📉 Gastos Operativos", value=f"${op_actuales:,.0f}", delta=f"Ganancia Bruta: ${ganancia_bruta_actual:,.0f}", delta_color="off")
             with c3:
                 st.metric(label="⏳ En la Calle (A Cobrar)", value=f"${plata_en_calle:,.0f}", delta=f"Deuda a Prov: ${deuda_prov:,.0f}", delta_color="off")
+            
+            st.divider()
+            
+            # Fila 2: Patrimonio del Negocio
+            st.markdown("**📦 Patrimonio en Taller**")
+            st.metric(label="🧱 Capital Inmovilizado (Mercadería)", value=f"${capital_inmovilizado:,.0f}", delta="Valor de costo total del stock actual", delta_color="off")
             
             # --- DETALLE DE DEUDORES Y ACREEDORES ---
             st.markdown("---")
