@@ -578,26 +578,32 @@ try:
     df_ver = leer_hoja(SHEET_URL, "Ventas")
     
     if not df_ver.empty:
-        # --- DASHBOARD DE GANANCIAS ---
+        # --- DASHBOARD DE GANANCIAS Y GASTOS (RENTA NETA) ---
         with st.expander("📊 Tablero de Finanzas (Mes a Mes)"):
             import pandas as pd
             import datetime
             
-            # Hacemos una copia para trabajar los números sin romper la tabla
+            # 1. Preparamos los datos de VENTAS
             df_dash = df_ver.copy()
-            
-            # Limpiamos las columnas para que el sistema pueda sumar matemáticamente
             df_dash['Fecha'] = pd.to_datetime(df_dash['Fecha'], dayfirst=True, errors='coerce')
             df_dash['Ganancia'] = pd.to_numeric(df_dash['Ganancia'], errors='coerce').fillna(0)
             df_dash['Venta $'] = pd.to_numeric(df_dash['Venta $'], errors='coerce').fillna(0)
             df_dash['Compra $'] = pd.to_numeric(df_dash['Compra $'], errors='coerce').fillna(0)
             
-            # Calculamos las fechas de hoy
+            # 2. Preparamos los datos de GASTOS leyendo directo de la base
+            try:
+                df_gastos = leer_hoja(SHEET_URL, "Gastos").copy()
+                df_gastos['Fecha'] = pd.to_datetime(df_gastos['Fecha'], dayfirst=True, errors='coerce')
+                df_gastos['Monto $'] = pd.to_numeric(df_gastos['Monto $'], errors='coerce').fillna(0)
+            except Exception:
+                # Si la hoja está vacía o falla, creamos una tabla en blanco para que no se caiga el sistema
+                df_gastos = pd.DataFrame(columns=['Fecha', 'Clasificacion', 'Monto $'])
+            
+            # 3. Calculamos tiempos
             hoy = datetime.date.today()
             mes_actual = hoy.month
             anio_actual = hoy.year
             
-            # Calculamos cuál fue el mes pasado
             if mes_actual == 1:
                 mes_pasado = 12
                 anio_pasado = anio_actual - 1
@@ -605,32 +611,48 @@ try:
                 mes_pasado = mes_actual - 1
                 anio_pasado = anio_actual
                 
-            # Filtramos la tabla separando la plata de cada mes
+            # 4. Filtramos Ventas por mes
             df_mes_actual = df_dash[(df_dash['Fecha'].dt.month == mes_actual) & (df_dash['Fecha'].dt.year == anio_actual)]
             df_mes_pasado = df_dash[(df_dash['Fecha'].dt.month == mes_pasado) & (df_dash['Fecha'].dt.year == anio_pasado)]
             
-            # --- INDICADORES FINANCIEROS ---
-            ganancia_actual = df_mes_actual['Ganancia'].sum()
-            ganancia_pasada = df_mes_pasado['Ganancia'].sum()
-            diferencia = ganancia_actual - ganancia_pasada
+            # 5. Filtramos Gastos por mes y separamos los Operativos (los que achican la ganancia)
+            if not df_gastos.empty:
+                gastos_actuales = df_gastos[(df_gastos['Fecha'].dt.month == mes_actual) & (df_gastos['Fecha'].dt.year == anio_actual)]
+                gastos_pasados = df_gastos[(df_gastos['Fecha'].dt.month == mes_pasado) & (df_gastos['Fecha'].dt.year == anio_pasado)]
+                
+                # Sumamos solo lo que es Gasto Operativo (fletes, AFIP, insumos, etc.)
+                op_actuales = gastos_actuales[gastos_actuales['Clasificacion'].astype(str).str.strip() == "Gasto Operativo"]['Monto $'].sum()
+                op_pasados = gastos_pasados[gastos_pasados['Clasificacion'].astype(str).str.strip() == "Gasto Operativo"]['Monto $'].sum()
+            else:
+                op_actuales = 0
+                op_pasados = 0
             
-            # Plata en la calle (Ventas totales en Cuenta Corriente)
+            # --- MATEMÁTICA FINANCIERA (RENTABILIDAD NETA) ---
+            ganancia_bruta_actual = df_mes_actual['Ganancia'].sum()
+            ganancia_bruta_pasada = df_mes_pasado['Ganancia'].sum()
+            
+            # El número que manda: Ganancia Neta = Bruta - Gastos Operativos
+            neta_actual = ganancia_bruta_actual - op_actuales
+            neta_pasada = ganancia_bruta_pasada - op_pasados
+            diferencia_neta = neta_actual - neta_pasada
+            
+            # Cuentas Corrientes (Plata en la calle y deuda)
             df_cobrar = df_mes_actual[df_mes_actual['Estado_Cobro'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
             plata_en_calle = df_cobrar['Venta $'].sum()
             
-            # Deuda a proveedores (Compras totales en Cuenta Corriente)
             df_pagar = df_mes_actual[df_mes_actual['Estado_Pago_Prov'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
             deuda_prov = df_pagar['Compra $'].sum()
             
-            # Mostramos los 3 bloques principales
+            # --- RENDERIZADO DEL TABLERO ---
+            st.markdown("**💰 Radiografía Financiera (Realidad del Mes)**")
             c1, c2, c3 = st.columns(3)
             with c1:
-                st.metric(label="📈 Ganancia Este Mes", value=f"${ganancia_actual:,.0f}", delta=f"${diferencia:,.0f} vs Mes Pasado")
+                st.metric(label="💵 Ganancia NETA (Bolsillo)", value=f"${neta_actual:,.0f}", delta=f"${diferencia_neta:,.0f} vs Mes Pasado")
             with c2:
-                st.metric(label="⏳ A Cobrar (En la Calle)", value=f"${plata_en_calle:,.0f}", delta="Fiado a Clientes", delta_color="off")
+                st.metric(label="📉 Gastos Operativos", value=f"${op_actuales:,.0f}", delta=f"Ganancia Bruta: ${ganancia_bruta_actual:,.0f}", delta_color="off")
             with c3:
-                st.metric(label="⚠️ A Pagar (Deuda Prov.)", value=f"${deuda_prov:,.0f}", delta="Fiado de Proveedores", delta_color="off")
-                
+                st.metric(label="⏳ En la Calle (A Cobrar)", value=f"${plata_en_calle:,.0f}", delta=f"Deuda a Prov: ${deuda_prov:,.0f}", delta_color="off")
+            
             # --- DETALLE DE DEUDORES Y ACREEDORES ---
             st.markdown("---")
             col_det_1, col_det_2 = st.columns(2)
