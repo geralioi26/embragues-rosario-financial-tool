@@ -640,8 +640,19 @@ try:
             df_cobrar = df_mes_actual[df_mes_actual['Estado_Cobro'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
             plata_en_calle = df_cobrar['Venta $'].sum()
             
+            # Deuda a proveedores por repuestos de trabajos diarios (Hoja Ventas)
             df_pagar = df_mes_actual[df_mes_actual['Estado_Pago_Prov'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
-            deuda_prov = df_pagar['Compra $'].sum()
+            deuda_diaria = df_pagar['Compra $'].sum()
+            
+            # Deuda a proveedores por compra masiva de stock (Hoja Gastos)
+            if not df_gastos.empty:
+                gastos_deuda = gastos_actuales[gastos_actuales['Estado_Pago'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
+                deuda_stock = gastos_deuda['Monto $'].sum()
+            else:
+                deuda_stock = 0
+                
+            # Unificamos la deuda total para la tarjeta grande
+            deuda_prov = deuda_diaria + deuda_stock
             
             # --- CÁLCULO DE CAPITAL INMOVILIZADO (STOCK) ---
             try:
