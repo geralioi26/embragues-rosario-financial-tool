@@ -54,9 +54,15 @@ try:
     GETNET_1 = a_numero(cfg["GETNET_1_PAGO"])
     GETNET_3 = a_numero(cfg["GETNET_3_CUOTAS"])
     GETNET_6 = a_numero(cfg["GETNET_6_CUOTAS"])
+    
+    # Mantenemos Más Pagos operativo para futura comparación de tasas
     MPAGOS_1 = a_numero(cfg["MASPAGOS_1_PAGO"])
     MPAGOS_3 = a_numero(cfg["MASPAGOS_3_CUOTAS"])
     MPAGOS_6 = a_numero(cfg["MASPAGOS_6_CUOTAS"])
+    
+    # NUEVO: LECTURA DEL DIVISOR PARA LINK DE PAGO GETNET
+    # Si por algún motivo se borra del Excel, usa 0.9758 por defecto como mecanismo de seguridad.
+    LINK_GETNET_DIVISOR = a_numero(cfg.get("LINK_GETNET_DIVISOR", 0.9758))
 
 except Exception as e:
     st.error(f"🚨 ERROR TÉCNICO DETALLADO: {e}")
@@ -67,6 +73,18 @@ except Exception as e:
         pass
     st.stop()
 
+
+# ==========================================
+# MÓDULO DE CÁLCULO: LINK DE PAGO (GETNET)
+# ==========================================
+def calcular_link_pago(precio_lista):
+    """
+    Calcula el monto base limpio para cargar en el Link de Pago Getnet.
+    Absorbe exactamente el 2% de arancel y el 21% de IVA sobre ese arancel.
+    Los intereses de las cuotas los aplica directamente la plataforma al cliente.
+    """
+    monto_base_link = precio_lista / LINK_GETNET_DIVISOR
+    return round(monto_base_link, 2)
 # 5. CATÁLOGOS
 try:
     df_kits = leer_hoja(SHEET_URL, "Catalogo_Kits")
