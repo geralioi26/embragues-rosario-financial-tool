@@ -693,11 +693,31 @@ try:
                     
             with col_det_2:
                 st.markdown("**🏭 ¿A quién le debo?**")
+                
+                # 1. Juntamos las deudas del trabajo diario (Hoja Ventas)
+                deudas_diarias = pd.DataFrame()
                 if not df_pagar.empty:
-                    detalle_prov = df_pagar.groupby('Proveedor')['Compra $'].sum().reset_index()
-                    detalle_prov = detalle_prov[detalle_prov['Compra $'] > 0]
-                    # Formato limpio para la tabla
-                    st.dataframe(detalle_prov.style.format({'Compra $': '${:,.0f}'}), hide_index=True, use_container_width=True)
+                    deudas_diarias = df_pagar[['Proveedor', 'Compra $']].rename(columns={'Compra $': 'Monto'})
+                
+                # 2. Juntamos las deudas de mercadería de stock (Hoja Gastos)
+                deudas_stock = pd.DataFrame()
+                if not df_gastos.empty:
+                    gastos_deuda = gastos_actuales[gastos_actuales['Estado_Pago'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
+                    if not gastos_deuda.empty:
+                        deudas_stock = gastos_deuda[['Proveedor', 'Monto $']].rename(columns={'Monto $': 'Monto'})
+                
+                # 3. Unificamos todo en una sola tabla maestra
+                df_deuda_total = pd.concat([deudas_diarias, deudas_stock]).dropna()
+                
+                if not df_deuda_total.empty:
+                    detalle_prov = df_deuda_total.groupby('Proveedor')['Monto'].sum().reset_index()
+                    detalle_prov = detalle_prov[detalle_prov['Monto'] > 0]
+                    
+                    if not detalle_prov.empty:
+                        # Formato limpio para la tabla
+                        st.dataframe(detalle_prov.style.format({'Monto': '${:,.0f}'}), hide_index=True, use_container_width=True)
+                    else:
+                        st.success("No le debés a ningún proveedor este mes.")
                 else:
                     st.success("No le debés a ningún proveedor este mes.")
 
