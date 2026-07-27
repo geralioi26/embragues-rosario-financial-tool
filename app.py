@@ -658,20 +658,24 @@ try:
             # --- RENDERIZADO DEL TABLERO ---
             st.markdown("**💰 Radiografía Financiera (Realidad del Mes)**")
             
-            # Fila 1: Dinero Circulante y Rentabilidad
-            c1, c2, c3 = st.columns(3)
+            # Fila 1: Rentabilidad del Mes
+            c1, c2 = st.columns(2)
             with c1:
                 st.metric(label="💵 Ganancia NETA (Bolsillo)", value=f"${neta_actual:,.0f}", delta=f"${diferencia_neta:,.0f} vs Mes Pasado")
             with c2:
                 st.metric(label="📉 Gastos Operativos", value=f"${op_actuales:,.0f}", delta=f"Ganancia Bruta: ${ganancia_bruta_actual:,.0f}", delta_color="off")
-            with c3:
-                st.metric(label="⏳ En la Calle (A Cobrar)", value=f"${plata_en_calle:,.0f}", delta=f"Deuda a Prov: ${deuda_prov:,.0f}", delta_color="off")
             
             st.divider()
             
-            # Fila 2: Patrimonio del Negocio
-            st.markdown("**📦 Patrimonio en Taller**")
-            st.metric(label="🧱 Capital Inmovilizado (Mercadería)", value=f"${capital_inmovilizado:,.0f}", delta="Valor de costo total del stock actual", delta_color="off")
+            # Fila 2: Patrimonio y Flujo de Capital
+            st.markdown("**📦 Patrimonio y Flujo de Capital**")
+            c3, c4, c5 = st.columns(3)
+            with c3:
+                st.metric(label="🧱 Capital Inmovilizado (Stock)", value=f"${capital_inmovilizado:,.0f}", delta="Valor de costo en taller", delta_color="off")
+            with c4:
+                st.metric(label="⏳ En la Calle (A Cobrar)", value=f"${plata_en_calle:,.0f}", delta="Fiado a clientes", delta_color="off")
+            with c5:
+                st.metric(label="⚠️ Deuda a Prov. (A Pagar)", value=f"${deuda_prov:,.0f}", delta="Cuentas pendientes", delta_color="off")
             
             # --- DETALLE DE DEUDORES Y ACREEDORES ---
             st.markdown("---")
