@@ -783,6 +783,12 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 col_monto = 'Venta $'
                 
                 st.write("📊 **Resumen: ¿Cuánto nos debe cada cliente en total?**")
+                
+                # --- PARCHE DE NORMALIZACIÓN DE CLIENTES ---
+                # Limpiamos espacios y pasamos todo a mayúsculas para evitar duplicados
+                df_deudas['Cliente'] = df_deudas['Cliente'].astype(str).str.strip().str.upper()
+                # -------------------------------------------
+                
                 resumen_totales = df_deudas.groupby('Cliente')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
                 resumen_totales.columns = ['Cliente', 'Deuda Total ($)']
                 st.dataframe(resumen_totales.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
@@ -842,6 +848,12 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 col_monto = 'Compra $'
                 
                 st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor?**")
+                
+                # --- PARCHE DE NORMALIZACIÓN DE PROVEEDORES ---
+                # Limpiamos espacios y pasamos todo a mayúsculas para evitar duplicados
+                df_deudas['Proveedor'] = df_deudas['Proveedor'].astype(str).str.strip().str.upper()
+                # ----------------------------------------------
+                
                 resumen_totales = df_deudas.groupby('Proveedor')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
                 resumen_totales.columns = ['Proveedor', 'Deuda Total ($)']
                 st.dataframe(resumen_totales.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
