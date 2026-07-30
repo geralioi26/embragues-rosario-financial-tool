@@ -867,6 +867,16 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                         try:
                             df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
                             
+                            # --- EL PARCHE: FORZAMOS LAS COLUMNAS A TEXTO ---
+                            if 'Estado_Pago_Prov' not in df_ventas_actual.columns:
+                                df_ventas_actual['Estado_Pago_Prov'] = ""
+                            df_ventas_actual['Estado_Pago_Prov'] = df_ventas_actual['Estado_Pago_Prov'].astype(str)
+                            
+                            if 'Forma_Pago_Prov' not in df_ventas_actual.columns:
+                                df_ventas_actual['Forma_Pago_Prov'] = ""
+                            df_ventas_actual['Forma_Pago_Prov'] = df_ventas_actual['Forma_Pago_Prov'].astype(str)
+                            # -----------------------------------------------
+                            
                             for sel in seleccion:
                                 fecha_sel = sel.split(" | ")[0]
                                 prov_sel = sel.split(" | ")[1]
