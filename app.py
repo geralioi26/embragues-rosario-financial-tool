@@ -695,7 +695,12 @@ try:
             with col_det_1:
                 st.markdown("**🎯 ¿Quién me debe?**")
                 if not df_cobrar.empty:
-                    detalle_clientes = df_cobrar.groupby('Cliente')['Venta $'].sum().reset_index()
+                    # --- PARCHE DE NORMALIZACIÓN ---
+                    # Hacemos una copia para no romper nada y unificamos mayúsculas
+                    temp_cobrar = df_cobrar.copy()
+                    temp_cobrar['Cliente'] = temp_cobrar['Cliente'].astype(str).str.strip().str.upper()
+                    
+                    detalle_clientes = temp_cobrar.groupby('Cliente')['Venta $'].sum().reset_index()
                     detalle_clientes = detalle_clientes[detalle_clientes['Venta $'] > 0]
                     # Formato limpio para la tabla
                     st.dataframe(detalle_clientes.style.format({'Venta $': '${:,.0f}'}), hide_index=True, use_container_width=True)
@@ -718,9 +723,14 @@ try:
                         deudas_stock = gastos_deuda[['Proveedor', 'Monto $']].rename(columns={'Monto $': 'Monto'})
                 
                 # 3. Unificamos todo en una sola tabla maestra
+                # 3. Unificamos todo en una sola tabla maestra
                 df_deuda_total = pd.concat([deudas_diarias, deudas_stock]).dropna()
                 
                 if not df_deuda_total.empty:
+                    # --- PARCHE DE NORMALIZACIÓN ---
+                    # Unificamos mayúsculas para los proveedores
+                    df_deuda_total['Proveedor'] = df_deuda_total['Proveedor'].astype(str).str.strip().str.upper()
+                    
                     detalle_prov = df_deuda_total.groupby('Proveedor')['Monto'].sum().reset_index()
                     detalle_prov = detalle_prov[detalle_prov['Monto'] > 0]
                     
