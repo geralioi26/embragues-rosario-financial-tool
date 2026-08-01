@@ -600,7 +600,8 @@ try:
                 df_gastos = pd.DataFrame(columns=['Fecha', 'Clasificacion', 'Monto $'])
             
             # 3. Calculamos tiempos
-            hoy = datetime.date.today()
+            # Le restamos 3 horas al servidor para que coincida con la hora de Argentina
+            hoy = (datetime.datetime.now() - datetime.timedelta(hours=3)).date()
             mes_actual = hoy.month
             anio_actual = hoy.year
             
@@ -637,16 +638,16 @@ try:
             diferencia_neta = neta_actual - neta_pasada
             
             # Cuentas Corrientes (Plata en la calle y deuda)
-            df_cobrar = df_mes_actual[df_mes_actual['Estado_Cobro'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
+            df_cobrar = df_dash[df_dash['Estado_Cobro'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
             plata_en_calle = df_cobrar['Venta $'].sum()
             
             # Deuda a proveedores por repuestos de trabajos diarios (Hoja Ventas)
-            df_pagar = df_mes_actual[df_mes_actual['Estado_Pago_Prov'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
+            df_pagar = df_dash[df_dash['Estado_Pago_Prov'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
             deuda_diaria = df_pagar['Compra $'].sum()
             
             # Deuda a proveedores por compra masiva de stock (Hoja Gastos)
             if not df_gastos.empty:
-                gastos_deuda = gastos_actuales[gastos_actuales['Estado_Pago'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
+                gastos_deuda = df_gastos[df_gastos['Estado_Pago'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
                 deuda_stock = gastos_deuda['Monto $'].sum()
             else:
                 deuda_stock = 0
@@ -705,7 +706,7 @@ try:
                     # Formato limpio para la tabla
                     st.dataframe(detalle_clientes.style.format({'Venta $': '${:,.0f}'}), hide_index=True, use_container_width=True)
                 else:
-                    st.success("Nadie te debe plata este mes. ¡Excelente!")
+                    st.success("Nadie te debe plata. ¡Excelente!")
                     
             with col_det_2:
                 st.markdown("**🏭 ¿A quién le debo?**")
@@ -738,9 +739,9 @@ try:
                         # Formato limpio para la tabla
                         st.dataframe(detalle_prov.style.format({'Monto': '${:,.0f}'}), hide_index=True, use_container_width=True)
                     else:
-                        st.success("No le debés a ningún proveedor este mes.")
+                        st.success("No le debés a ningún proveedor.")
                 else:
-                    st.success("No le debés a ningún proveedor este mes.")
+                    st.success("No le debés a ningún proveedor.")
 
             st.markdown("---")
                 
