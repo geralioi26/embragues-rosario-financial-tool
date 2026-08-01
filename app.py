@@ -831,7 +831,7 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                                 vehiculo_sel = sel.split(" | ")[2]
                                 
                                 mascara = (df_ventas_actual['Fecha'].astype(str) == fecha_sel) & \
-                                          (df_ventas_actual['Cliente'].astype(str) == cliente_sel) & \
+                                          (df_ventas_actual['Cliente'].astype(str).str.strip().str.upper() == cliente_sel) & \
                                           (df_ventas_actual['Vehículo'].astype(str) == vehiculo_sel)
                                 
                                 # Actualizamos el estado y la forma de pago simultáneamente
@@ -906,7 +906,7 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                                 vehiculo_sel = sel.split(" | ")[2]
                                 
                                 mascara = (df_ventas_actual['Fecha'].astype(str) == fecha_sel) & \
-                                          (df_ventas_actual['Proveedor'].astype(str) == prov_sel) & \
+                                          (df_ventas_actual['Proveedor'].astype(str).str.strip().str.upper() == prov_sel) & \
                                           (df_ventas_actual['Vehículo'].astype(str) == vehiculo_sel)
                                 
                                 # Actualizamos estado y la nueva columna del proveedor
