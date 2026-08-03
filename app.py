@@ -802,46 +802,73 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
     try:
         df_ventas = leer_fresca(SHEET_URL, "Ventas")
         
+        # Leemos la nueva hoja de canjes (si falla o está vacía, creamos una estructura base en el aire)
+        try:
+            df_saldos = leer_fresca(SHEET_URL, "Saldos_y_Canjes")
+        except:
+            df_saldos = pd.DataFrame(columns=["Fecha", "Cliente", "Detalle", "Monto a Favor"])
+
         # ==========================================
-        # OPCIÓN 1: COBRO A CLIENTES
+        # OPCIÓN 1: COBRO A CLIENTES Y CANJES
         # ==========================================
         if tipo_saldo == "Cobro a Cliente":
             df_deudas = df_ventas[df_ventas['Estado_Cobro'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
             
+            st.write("📊 **Resumen: ¿Cuánto nos debe cada cliente REALMENTE?**")
+            
+            # 1. Calculamos lo que deben por trabajos (Ventas)
+            df_deudas['Cliente'] = df_deudas['Cliente'].astype(str).str.strip().str.upper()
             if not df_deudas.empty:
-                col_monto = 'Venta $'
+                resumen_deudas = df_deudas.groupby('Cliente')['Venta $'].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
+                resumen_deudas.columns = ['Cliente', 'Deuda por Trabajos ($)']
+            else:
+                resumen_deudas = pd.DataFrame(columns=['Cliente', 'Deuda por Trabajos ($)'])
+            
+            # 2. Calculamos los saldos a favor (de la hoja nueva Saldos_y_Canjes)
+            if not df_saldos.empty:
+                df_saldos['Cliente'] = df_saldos['Cliente'].astype(str).str.strip().str.upper()
+                resumen_a_favor = df_saldos.groupby('Cliente')['Monto a Favor'].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
+                resumen_a_favor.columns = ['Cliente', 'Saldo a Favor ($)']
+            else:
+                resumen_a_favor = pd.DataFrame(columns=['Cliente', 'Saldo a Favor ($)'])
+            
+            # 3. Cruzamos los datos y restamos para sacar la deuda real
+            if not resumen_deudas.empty or not resumen_a_favor.empty:
+                resumen_total = pd.merge(resumen_deudas, resumen_a_favor, on='Cliente', how='outer').fillna(0)
+                resumen_total['DEUDA REAL FINAL ($)'] = resumen_total['Deuda por Trabajos ($)'] - resumen_total['Saldo a Favor ($)']
                 
-                st.write("📊 **Resumen: ¿Cuánto nos debe cada cliente en total?**")
+                # Filtramos para no mostrar clientes que están en cero perfecto
+                resumen_total = resumen_total[resumen_total['DEUDA REAL FINAL ($)'] != 0]
                 
-                # --- PARCHE DE NORMALIZACIÓN DE CLIENTES ---
-                df_deudas['Cliente'] = df_deudas['Cliente'].astype(str).str.strip().str.upper()
-                # -------------------------------------------
-                
-                resumen_totales = df_deudas.groupby('Cliente')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
-                resumen_totales.columns = ['Cliente', 'Deuda Total ($)']
-                st.dataframe(resumen_totales.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
-                
-                st.write("📝 **Desglose exacto de los trabajos pendientes:**")
-                cols_mostrar = ['Fecha', 'Cliente', 'Vehículo', 'Detalle', col_monto]
+                st.dataframe(resumen_total.style.format({
+                    'Deuda por Trabajos ($)': '${:,.0f}', 
+                    'Saldo a Favor ($)': '${:,.0f}', 
+                    'DEUDA REAL FINAL ($)': '${:,.0f}'
+                }), hide_index=True)
+            else:
+                st.success("✅ No hay deudas registradas ni saldos a favor.")
+            
+            st.divider()
+            
+            # --- SECCIÓN: COBROS TRADICIONALES ---
+            if not df_deudas.empty:
+                st.write("📝 **Desglose de trabajos pendientes (Para cobrar en Efectivo/Transf):**")
+                cols_mostrar = ['Fecha', 'Cliente', 'Vehículo', 'Detalle', 'Venta $']
                 cols_finales = [c for c in cols_mostrar if c in df_deudas.columns]
                 
                 df_detalle = df_deudas[cols_finales].copy()
-                df_detalle[col_monto] = pd.to_numeric(df_detalle[col_monto], errors='coerce').fillna(0)
-                st.dataframe(df_detalle.style.format({col_monto: '${:,.0f}'}), hide_index=True, use_container_width=True)
-                
-                st.divider()
+                df_detalle['Venta $'] = pd.to_numeric(df_detalle['Venta $'], errors='coerce').fillna(0)
+                st.dataframe(df_detalle.style.format({'Venta $': '${:,.0f}'}), hide_index=True, use_container_width=True)
                 
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
                 seleccion = st.multiselect("Seleccioná la o las deudas a cobrar (podés elegir varias):", opciones.tolist())
                 
-                # --- INYECTAMOS FORMA DE COBRO ---
                 forma_cobro = st.selectbox("¿Cómo te pagó el cliente?", ["Efectivo", "Transferencia", "Débito", "Otro"])
                 
                 if st.button("💰 Registrar Cobro(s)"):
                     if seleccion:
                         try:
                             df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
-                            
                             for sel in seleccion:
                                 fecha_sel = sel.split(" | ")[0]
                                 cliente_sel = sel.split(" | ")[1]
@@ -851,7 +878,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                                           (df_ventas_actual['Cliente'].astype(str).str.strip().str.upper() == cliente_sel) & \
                                           (df_ventas_actual['Vehículo'].astype(str) == vehiculo_sel)
                                 
-                                # Actualizamos el estado y la forma de pago simultáneamente
                                 df_ventas_actual.loc[mascara, 'Estado_Cobro'] = 'Pagado'
                                 df_ventas_actual.loc[mascara, 'Forma_de_pago'] = forma_cobro
                                 
@@ -863,104 +889,95 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                     else:
                         st.warning("⚠️ Seleccioná al menos una deuda para cobrar.")
 
-                # ==========================================
-                # --- NUEVA SECCIÓN: CANJES / DESCUENTOS ---
-                # ==========================================
-                st.markdown("---")
-                st.markdown("### 🔄 Registrar Canje / Descuento por Repuestos")
-                st.info("Usá esta opción si un cliente te entregó repuestos a cuenta para descontarle de su deuda actual.")
+            # ==========================================
+            # --- EL PANEL DE CANJES QUE TE GUSTA ---
+            # ==========================================
+            st.markdown("---")
+            st.markdown("### 🔄 Registrar Canje / Descuento por Repuestos")
+            st.info("Usá esta opción si un cliente te entregó repuestos a cuenta. Esto se guarda en tu hoja 'Saldos_y_Canjes' para restar de su deuda sin afectar tus Ventas del mes.")
+            
+            # Sacamos la lista de clientes del resumen (los que te deben)
+            lista_clientes = resumen_total['Cliente'].tolist() if 'resumen_total' in locals() and not resumen_total.empty else []
+            if "REPUESTOS ARIEL" not in lista_clientes:
+                lista_clientes.append("REPUESTOS ARIEL") # Lo forzamos por si justo un día no te debe nada pero te deja mercadería
                 
-                lista_deudores = resumen_totales['Cliente'].tolist()
+            with st.form("form_canje", clear_on_submit=True):
+                col_c1, col_c2 = st.columns(2)
+                with col_c1:
+                    fecha_canje = st.date_input("Fecha del Canje", format="DD/MM/YYYY")
+                    cliente_canje = st.selectbox("¿A qué cliente le descontamos?", lista_clientes)
+                    monto_canje = st.number_input("Monto exacto a descontar ($)", min_value=0, step=1000)
+                with col_c2:
+                    detalle_canje = st.text_input("Detalle del Repuesto (Ej: Crapodina de empuje)")
                 
-                with st.form("form_canje", clear_on_submit=True):
-                    col_c1, col_c2 = st.columns(2)
-                    with col_c1:
-                        fecha_canje = st.date_input("Fecha del Canje", format="DD/MM/YYYY")
-                        cliente_canje = st.selectbox("¿A qué cliente le descontamos?", lista_deudores)
-                        monto_canje = st.number_input("Monto exacto a descontar ($)", min_value=0, step=1000)
-                    with col_c2:
-                        detalle_canje = st.text_input("Detalle del Repuesto (Ej: Crapodina de empuje)")
-                    
-                    submit_canje = st.form_submit_button("🔄 Aplicar Descuento / Canje")
-                    
-                    if submit_canje:
-                        if monto_canje > 0 and detalle_canje != "":
-                            try:
-                                df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
-                                
-                                # Preparamos una fila vacía pero con las columnas EXACTAS de tu hoja Ventas
-                                nueva_fila_dict = {col: "" for col in df_ventas_actual.columns}
-                                
-                                # Llenamos los datos clave del canje
-                                nueva_fila_dict["Fecha"] = fecha_canje.strftime("%d/%m/%Y")
-                                nueva_fila_dict["Cliente"] = cliente_canje
-                                if "Vehículo" in nueva_fila_dict:
-                                    nueva_fila_dict["Vehículo"] = "CANJE / DESCUENTO"
-                                if "Detalle" in nueva_fila_dict:
-                                    nueva_fila_dict["Detalle"] = f"Canje por repuesto: {detalle_canje}"
-                                if "Venta $" in nueva_fila_dict:
-                                    nueva_fila_dict["Venta $"] = -monto_canje  # ¡FUNDAMENTAL: EN NEGATIVO!
-                                if "Estado_Cobro" in nueva_fila_dict:
-                                    nueva_fila_dict["Estado_Cobro"] = "Cuenta Corriente" # Queda en CC para que reste
-                                if "Forma_de_pago" in nueva_fila_dict:
-                                    nueva_fila_dict["Forma_de_pago"] = "Canje"
-                                
-                                df_nueva_fila = pd.DataFrame([nueva_fila_dict])
-                                df_actualizado = pd.concat([df_ventas_actual, df_nueva_fila], ignore_index=True)
-                                
-                                conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_actualizado)
-                                st.cache_data.clear()
-                                st.success(f"✅ Canje registrado con éxito. Se descontaron ${monto_canje:,.0f} de la deuda de {cliente_canje}. Excel actualizado.")
-                            except Exception as e:
-                                st.error(f"⚠️ Error al registrar el canje: {e}")
-                        else:
-                            st.warning("⚠️ Ingresá un monto mayor a $0 y detallá qué repuesto recibiste.")
+                submit_canje = st.form_submit_button("🔄 Aplicar Descuento / Canje")
+                
+                if submit_canje:
+                    if monto_canje > 0 and detalle_canje != "":
+                        try:
+                            # 1. Leemos tu HOJA NUEVA
+                            df_saldos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
+                            
+                            # 2. Armamos la fila con los 4 datos clave
+                            nueva_fila = pd.DataFrame([{
+                                "Fecha": fecha_canje.strftime("%d/%m/%Y"),
+                                "Cliente": cliente_canje,
+                                "Detalle": detalle_canje,
+                                "Monto a Favor": monto_canje
+                            }])
+                            
+                            # 3. Concatenamos y guardamos (si no tenía columnas, asume las de nueva_fila)
+                            if df_saldos_actual.empty or len(df_saldos_actual.columns) == 0:
+                                df_actualizado = nueva_fila
+                            else:
+                                df_actualizado = pd.concat([df_saldos_actual, nueva_fila], ignore_index=True)
+                            
+                            conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_actualizado)
+                            st.cache_data.clear()
+                            st.success(f"✅ ¡Canje guardado con éxito! Se restaron ${monto_canje:,.0f} de la deuda de {cliente_canje}. Tu hoja de Ventas sigue intacta.")
+                        except Exception as e:
+                            st.error(f"⚠️ Error al guardar en Saldos_y_Canjes: Asegurate de haberle puesto los títulos en la fila 1 (Fecha, Cliente, Detalle, Monto a Favor). Error: {e}")
+                    else:
+                        st.warning("⚠️ Ingresá un monto mayor a $0 y detallá qué repuesto recibiste.")
 
-            else:
-                st.success("✅ No hay deudas de clientes registradas. ¡Están todos al día!")
-                st.divider()
 
         # ==========================================
         # OPCIÓN 2: PAGO A PROVEEDORES
         # ==========================================
         elif tipo_saldo == "Pago a Proveedor":
-            df_deudas = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
+            df_deudas_prov = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
             
-            if not df_deudas.empty:
+            if not df_deudas_prov.empty:
                 col_monto = 'Compra $'
                 
                 st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor?**")
                 
-                # --- PARCHE DE NORMALIZACIÓN DE PROVEEDORES ---
-                df_deudas['Proveedor'] = df_deudas['Proveedor'].astype(str).str.strip().str.upper()
-                # ----------------------------------------------
+                df_deudas_prov['Proveedor'] = df_deudas_prov['Proveedor'].astype(str).str.strip().str.upper()
                 
-                resumen_totales = df_deudas.groupby('Proveedor')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
-                resumen_totales.columns = ['Proveedor', 'Deuda Total ($)']
-                st.dataframe(resumen_totales.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
+                resumen_totales_prov = df_deudas_prov.groupby('Proveedor')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
+                resumen_totales_prov.columns = ['Proveedor', 'Deuda Total ($)']
+                st.dataframe(resumen_totales_prov.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
                 
                 st.write("📝 **Desglose exacto de las compras pendientes:**")
                 cols_mostrar = ['Fecha', 'Proveedor', 'Vehículo', 'Detalle', col_monto]
-                cols_finales = [c for c in cols_mostrar if c in df_deudas.columns]
+                cols_finales = [c for c in cols_mostrar if c in df_deudas_prov.columns]
                 
-                df_detalle = df_deudas[cols_finales].copy()
-                df_detalle[col_monto] = pd.to_numeric(df_detalle[col_monto], errors='coerce').fillna(0)
-                st.dataframe(df_detalle.style.format({col_monto: '${:,.0f}'}), hide_index=True, use_container_width=True)
+                df_detalle_prov = df_deudas_prov[cols_finales].copy()
+                df_detalle_prov[col_monto] = pd.to_numeric(df_detalle_prov[col_monto], errors='coerce').fillna(0)
+                st.dataframe(df_detalle_prov.style.format({col_monto: '${:,.0f}'}), hide_index=True, use_container_width=True)
                 
                 st.divider()
                 
-                opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Proveedor'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
-                seleccion = st.multiselect("Seleccioná la o las deudas a pagar (podés elegir varias):", opciones.tolist())
+                opciones_prov = df_deudas_prov['Fecha'].astype(str) + " | " + df_deudas_prov['Proveedor'].astype(str) + " | " + df_deudas_prov['Vehículo'].astype(str)
+                seleccion_prov = st.multiselect("Seleccioná la o las deudas a pagar (podés elegir varias):", opciones_prov.tolist())
                 
-                # --- INYECTAMOS FORMA DE PAGO A PROVEEDOR ---
                 forma_pago_prov = st.selectbox("¿Cómo le pagaste al proveedor?", ["Efectivo", "Transferencia", "Otro"])
                 
                 if st.button("💸 Registrar Pago(s)"):
-                    if seleccion:
+                    if seleccion_prov:
                         try:
                             df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
                             
-                            # --- EL PARCHE: FORZAMOS LAS COLUMNAS A TEXTO ---
                             if 'Estado_Pago_Prov' not in df_ventas_actual.columns:
                                 df_ventas_actual['Estado_Pago_Prov'] = ""
                             df_ventas_actual['Estado_Pago_Prov'] = df_ventas_actual['Estado_Pago_Prov'].astype(str)
@@ -968,9 +985,8 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                             if 'Forma_Pago_Prov' not in df_ventas_actual.columns:
                                 df_ventas_actual['Forma_Pago_Prov'] = ""
                             df_ventas_actual['Forma_Pago_Prov'] = df_ventas_actual['Forma_Pago_Prov'].astype(str)
-                            # -----------------------------------------------
                             
-                            for sel in seleccion:
+                            for sel in seleccion_prov:
                                 fecha_sel = sel.split(" | ")[0]
                                 prov_sel = sel.split(" | ")[1]
                                 vehiculo_sel = sel.split(" | ")[2]
@@ -979,13 +995,12 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                                           (df_ventas_actual['Proveedor'].astype(str).str.strip().str.upper() == prov_sel) & \
                                           (df_ventas_actual['Vehículo'].astype(str) == vehiculo_sel)
                                 
-                                # Actualizamos estado y la nueva columna del proveedor
                                 df_ventas_actual.loc[mascara, 'Estado_Pago_Prov'] = 'Pagado'
                                 df_ventas_actual.loc[mascara, 'Forma_Pago_Prov'] = forma_pago_prov
                                 
                             conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_ventas_actual)
                             st.cache_data.clear()
-                            st.success(f"✅ {len(seleccion)} pago(s) registrado(s) en {forma_pago_prov}. Excel actualizado.")
+                            st.success(f"✅ {len(seleccion_prov)} pago(s) registrado(s) en {forma_pago_prov}. Excel actualizado.")
                         except Exception as e:
                             st.error(f"⚠️ Error al actualizar pagos: {e}")
                     else:
@@ -996,7 +1011,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 
     except Exception as e:
         st.error(f"⚠️ Error al cargar las deudas: {e}")
-
 st.divider()
 st.subheader("💸 Gestión de Gastos e Inversiones")
 
