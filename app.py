@@ -796,7 +796,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 st.write("📊 **Resumen: ¿Cuánto nos debe cada cliente en total?**")
                 
                 # --- PARCHE DE NORMALIZACIÓN DE CLIENTES ---
-                # Limpiamos espacios y pasamos todo a mayúsculas para evitar duplicados
                 df_deudas['Cliente'] = df_deudas['Cliente'].astype(str).str.strip().str.upper()
                 # -------------------------------------------
                 
@@ -845,6 +844,60 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                             st.error(f"⚠️ Error al actualizar cobros: {e}")
                     else:
                         st.warning("⚠️ Seleccioná al menos una deuda para cobrar.")
+
+                # ==========================================
+                # --- NUEVA SECCIÓN: CANJES / DESCUENTOS ---
+                # ==========================================
+                st.markdown("---")
+                st.markdown("### 🔄 Registrar Canje / Descuento por Repuestos")
+                st.info("Usá esta opción si un cliente te entregó repuestos a cuenta para descontarle de su deuda actual.")
+                
+                lista_deudores = resumen_totales['Cliente'].tolist()
+                
+                with st.form("form_canje", clear_on_submit=True):
+                    col_c1, col_c2 = st.columns(2)
+                    with col_c1:
+                        fecha_canje = st.date_input("Fecha del Canje", format="DD/MM/YYYY")
+                        cliente_canje = st.selectbox("¿A qué cliente le descontamos?", lista_deudores)
+                        monto_canje = st.number_input("Monto exacto a descontar ($)", min_value=0, step=1000)
+                    with col_c2:
+                        detalle_canje = st.text_input("Detalle del Repuesto (Ej: Crapodina de empuje)")
+                    
+                    submit_canje = st.form_submit_button("🔄 Aplicar Descuento / Canje")
+                    
+                    if submit_canje:
+                        if monto_canje > 0 and detalle_canje != "":
+                            try:
+                                df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
+                                
+                                # Preparamos una fila vacía pero con las columnas EXACTAS de tu hoja Ventas
+                                nueva_fila_dict = {col: "" for col in df_ventas_actual.columns}
+                                
+                                # Llenamos los datos clave del canje
+                                nueva_fila_dict["Fecha"] = fecha_canje.strftime("%d/%m/%Y")
+                                nueva_fila_dict["Cliente"] = cliente_canje
+                                if "Vehículo" in nueva_fila_dict:
+                                    nueva_fila_dict["Vehículo"] = "CANJE / DESCUENTO"
+                                if "Detalle" in nueva_fila_dict:
+                                    nueva_fila_dict["Detalle"] = f"Canje por repuesto: {detalle_canje}"
+                                if "Venta $" in nueva_fila_dict:
+                                    nueva_fila_dict["Venta $"] = -monto_canje  # ¡FUNDAMENTAL: EN NEGATIVO!
+                                if "Estado_Cobro" in nueva_fila_dict:
+                                    nueva_fila_dict["Estado_Cobro"] = "Cuenta Corriente" # Queda en CC para que reste
+                                if "Forma_de_pago" in nueva_fila_dict:
+                                    nueva_fila_dict["Forma_de_pago"] = "Canje"
+                                
+                                df_nueva_fila = pd.DataFrame([nueva_fila_dict])
+                                df_actualizado = pd.concat([df_ventas_actual, df_nueva_fila], ignore_index=True)
+                                
+                                conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_actualizado)
+                                st.cache_data.clear()
+                                st.success(f"✅ Canje registrado con éxito. Se descontaron ${monto_canje:,.0f} de la deuda de {cliente_canje}. Excel actualizado.")
+                            except Exception as e:
+                                st.error(f"⚠️ Error al registrar el canje: {e}")
+                        else:
+                            st.warning("⚠️ Ingresá un monto mayor a $0 y detallá qué repuesto recibiste.")
+
             else:
                 st.success("✅ No hay deudas de clientes registradas. ¡Están todos al día!")
                 st.divider()
@@ -861,7 +914,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor?**")
                 
                 # --- PARCHE DE NORMALIZACIÓN DE PROVEEDORES ---
-                # Limpiamos espacios y pasamos todo a mayúsculas para evitar duplicados
                 df_deudas['Proveedor'] = df_deudas['Proveedor'].astype(str).str.strip().str.upper()
                 # ----------------------------------------------
                 
