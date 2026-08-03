@@ -319,7 +319,7 @@ elif "Reparación" in tipo_item:
     
     costo_crap_auto = 0
     if crap_codigo:
-        desc_crap = st.sidebar.checkbox("📉 Descontar Crapodina del Stock", value=True, key=f"desc_crap_{fk}")
+        desc_crap = st.sidebar.checkbox("📉 Descontar Crapodina del Stock", value=False, key=f"desc_crap_{fk}")
         if desc_crap:
             costo_crap_auto = obtener_costo_stock(crap_codigo)
             
@@ -344,7 +344,7 @@ elif "Reparación" in tipo_item:
         
     costo_forros_auto = 0
     if forros_codigo:
-        desc_forros = st.sidebar.checkbox("📉 Descontar Forros del Stock", value=True, key=f"desc_forros_{fk}")
+        desc_forros = st.sidebar.checkbox("📉 Descontar Forros del Stock", value=False, key=f"desc_forros_{fk}")
         if desc_forros:
             if forros_combinados:
                 costo_forros_auto = obtener_costo_stock(cod1) + obtener_costo_stock(cod2)
@@ -419,7 +419,7 @@ else:
     
     costo_kit_auto = 0
     if codigo_manual:
-        desc_kit = st.sidebar.checkbox("📉 Descontar Repuesto del Stock", value=True, key=f"desc_kit_{fk}")
+        desc_kit = st.sidebar.checkbox("📉 Descontar Repuesto del Stock", value=False, key=f"desc_kit_{fk}")
         if desc_kit:
             costo_kit_auto = obtener_costo_stock(codigo_manual)
             
