@@ -125,7 +125,6 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca, motor
     try:
         df = leer_fresca(SHEET_URL, "Catalogo_Kits")
         
-        # BLINDAJE: Adaptado exactamente a las columnas de tu Excel
         if 'Vehiculo' not in df.columns: df['Vehiculo'] = ""
         
         marca_up = str(marca).upper()
@@ -199,35 +198,41 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
     except Exception as e:
         st.error(f"Falla al guardar en Crapodinas: {e}")
 
+# --- NUEVO: FUNCIÓN INTELIGENTE PARA LEER PRECIOS DEL INVENTARIO ---
+def obtener_costo_stock(codigo):
+    if not codigo or str(codigo).strip() == "":
+        return 0
+    try:
+        df_stock = leer_fresca(SHEET_URL, "Inventario_Stock")
+        filtro = df_stock['Código'].astype(str).str.strip() == str(codigo).strip()
+        
+        if filtro.any():
+            indice = df_stock.index[filtro].tolist()[0]
+            costo = df_stock.at[indice, 'Costo_Unitario']
+            return float(pd.to_numeric(costo, errors='coerce'))
+    except Exception:
+        pass
+    return 0
+# ------------------------------------------------------------------
+
 def descontar_stock(codigo, cantidad_a_restar):
-    # Si no hay código (ej: el campo quedó vacío en el formulario), no hace nada
     if not codigo or str(codigo).strip() == "":
         return
         
     try:
-        # BLINDAJE DE MEMORIA 1: Borramos el caché justo antes de leer para asegurar stock real
         st.cache_data.clear()
-        
-        # Lee la hoja de inventario fresca (ahora sí, 100% real)
         df_stock = leer_fresca(SHEET_URL, "Inventario_Stock")
         
-        # Filtro con la corrección de tildes que ya aplicamos
         filtro = df_stock['Código'].astype(str).str.strip() == str(codigo).strip()
         
         if filtro.any():
-            # Extrae el número de fila y la cantidad actual
             indice = df_stock.index[filtro].tolist()[0]
             stock_actual = int(df_stock.at[indice, 'Cantidad'])
             
-            # Hace la resta matemática
             nuevo_stock = stock_actual - cantidad_a_restar
             df_stock.at[indice, 'Cantidad'] = nuevo_stock
             
-            # Sube el cambio al Excel
             conn.update(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", data=df_stock)
-            
-            # BLINDAJE DE MEMORIA 2: Borramos el caché apenas terminamos de escribir 
-            # para que el próximo repuesto a descontar lea la resta que acabamos de hacer
             st.cache_data.clear()
         else:
             st.warning(f"Atención: El repuesto código '{codigo}' no se encontró en el inventario.")
@@ -238,11 +243,10 @@ def descontar_stock(codigo, cantidad_a_restar):
 def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_bruto, monto_neto, costo, proveedor,
                       cod_kit, cod_crap, f_pago, e_cliente, e_prov, f_pago_prov,
                       m_forros, c_forros, costo_f, ganancia,
-                      desc_kit, desc_crap, desc_forros): # <--- ACÁ RECIBIMOS LAS 3 ÓRDENES NUEVAS
+                      desc_kit, desc_crap, desc_forros): 
                       
     fecha_hoy = (datetime.now() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
     
-    # Lista de columnas corregida (se agregó Forma_Pago_Prov donde corresponde)
     columnas = ["Fecha", "Nro_Trabajo", "Categoría", "Cliente", "Vehículo", "Detalle",
                 "Venta $", "Compra $", "Proveedor", "Código", "Cod_Crapodina",
                 "Forma_de_pago", "Estado_Cobro", "Estado_Pago_Prov", "Forma_Pago_Prov",
@@ -254,7 +258,6 @@ def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_
         st.error(f"Error al leer Ventas: {e}")
         st.stop()
         
-    # Inyectamos la variable f_pago_prov en la nueva fila de datos
     nueva = pd.DataFrame([[fecha_hoy, nro_trabajo, categoria, cliente, vehiculo, detalle,
                            monto_bruto, costo, proveedor, cod_kit, cod_crap,
                            f_pago, e_cliente, e_prov, f_pago_prov,
@@ -265,11 +268,7 @@ def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_
     conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_nuevo)
     leer_hoja.clear()
 
-    # -------------------------------------------------------------
-    # GATILLO AUTOMÁTICO DE DESCUENTO DE STOCK (AHORA INTELIGENTE)
-    # -------------------------------------------------------------
-    
-    # 1. Descuento de Forros (Fijate que ahora exige desc_forros == True)
+    # --- DESCUENTO DE STOCK FÍSICO ---
     if desc_forros and c_forros and str(c_forros).strip() != "":
         if "|" in str(c_forros):
             codigos = str(c_forros).split("|")
@@ -278,7 +277,6 @@ def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_
         else:
             descontar_stock(str(c_forros).strip(), 2)
             
-    # 2. Descuento de Kit y Crapodina (si corresponde y si está tildado)
     if desc_kit and cod_kit and str(cod_kit).strip() != "":
         descontar_stock(str(cod_kit).strip(), 1)
         
@@ -298,7 +296,6 @@ if "venta_exitosa" in st.session_state:
     st.sidebar.success(st.session_state["venta_exitosa"])
     del st.session_state["venta_exitosa"]
 
-# Inicialización limpia de variables (Evita errores de variables indefinidas)
 m_kit = m_forros = forros_codigo = crap_codigo = tipo_crap = codigo_manual = cod_kit_final = cod_crap_final = ""
 forros_costo = crap_costo = precio_compra = 0
 m_crap = []
@@ -315,20 +312,26 @@ if "Nuevo" in tipo_item:
 elif "Reparación" in tipo_item:
     cat_f, icono, incl_rectif = "Reparación", "🔧", True
     
-    # --- BLOQUE CRAPODINA ORDENADO ---
+    # --- BLOQUE CRAPODINA AUTOMATIZADO ---
     m_crap = st.sidebar.multiselect("Marcas de Crapodina:", ["Luk","Skf","Ina","Dbh","The"], default=["Luk","Skf"], key=f"mcrap_{fk}")
     tipo_crap = st.sidebar.selectbox("⚙️ Tipo de Crapodina:", ["Hidráulica","Mecánica"], key=f"tipocrap_{fk}")
     crap_codigo = st.sidebar.text_input("Código de Crapodina:", "", key=f"crapcod_{fk}")
     
+    costo_crap_auto = 0
     if crap_codigo:
         desc_crap = st.sidebar.checkbox("📉 Descontar Crapodina del Stock", value=True, key=f"desc_crap_{fk}")
-        
-    crap_costo = st.sidebar.number_input("Costo de Crapodina ($):", min_value=0, value=0, key=f"crapcost_{fk}")
+        if desc_crap:
+            costo_crap_auto = obtener_costo_stock(crap_codigo)
+            
+    crap_costo = st.sidebar.number_input("Costo de Crapodina ($):", min_value=0, value=int(costo_crap_auto), key=f"crapcost_{fk}")
+    if desc_crap and costo_crap_auto > 0:
+        st.sidebar.success(f"✔️ Costo extraído del Stock: ${costo_crap_auto:,.0f}")
     
-    # --- BLOQUE FORROS ---
+    # --- BLOQUE FORROS AUTOMATIZADO ---
     m_forros = st.sidebar.selectbox("Marca de Forros:", ["IAR Metal","Fras-le","Termolite","Otro"], key=f"mforro_{fk}")
     forros_combinados = st.sidebar.checkbox("¿Forros combinados (distinto espesor)?", key=f"fcomb_{fk}")
     
+    cod1 = cod2 = ""
     if forros_combinados:
         col1, col2 = st.sidebar.columns(2)
         with col1:
@@ -339,11 +342,19 @@ elif "Reparación" in tipo_item:
     else:
         forros_codigo = st.sidebar.text_input("Código de Forros (2 iguales):", "", key=f"forrocod_{fk}")
         
+    costo_forros_auto = 0
     if forros_codigo:
         desc_forros = st.sidebar.checkbox("📉 Descontar Forros del Stock", value=True, key=f"desc_forros_{fk}")
+        if desc_forros:
+            if forros_combinados:
+                costo_forros_auto = obtener_costo_stock(cod1) + obtener_costo_stock(cod2)
+            else:
+                costo_forros_auto = obtener_costo_stock(forros_codigo) * 2
+                
+    forros_costo = st.sidebar.number_input("Costo Total de Forros ($):", min_value=0, value=int(costo_forros_auto), key=f"forrocost_{fk}")
+    if desc_forros and costo_forros_auto > 0:
+        st.sidebar.success(f"✔️ Costo extraído del Stock: ${costo_forros_auto:,.0f}")
         
-    forros_costo = st.sidebar.number_input("Costo Total de Forros ($):", min_value=0, value=0, key=f"forrocost_{fk}")
-    
     m_neg = [f"*{m}*" for m in m_crap]
     t_m = (", ".join(m_neg[:-1]) + " o " + m_neg[-1]) if len(m_neg) > 1 else (m_neg[0] if m_neg else "*primera marca*")
     sugerencia = f"reparado completo placa disco con forros originales volante rectificado y balanceado con crapodina {t_m}"
@@ -394,7 +405,7 @@ detalle_final = st.sidebar.text_area("💬 Detalle en WhatsApp:", value=sugerenc
 st.sidebar.divider()
 st.sidebar.write("📸 **Uso Interno**")
 
-# --- LÓGICA DE COSTOS Y STOCK INTEGRADA ---
+# --- LÓGICA DE COSTOS Y STOCK INTEGRADA AUTOMATIZADA ---
 if cat_f == "Reparación":
     codigo_manual = crap_codigo
     precio_compra = crap_costo + forros_costo
@@ -404,12 +415,17 @@ elif cat_f == "Rectificación":
     precio_compra = 0
     st.sidebar.info("💰 Costo Materiales: $0 (Servicio Propio)")
 else:
-    # Esto engloba "Kit Nuevo", "Repuesto Suelto" y "Otro" usando la misma caja de texto unificada
     codigo_manual = st.sidebar.text_input("Código de repuesto:", "", key=f"codrep_{fk}")
-    precio_compra = st.sidebar.number_input("Precio de COMPRA ($):", min_value=0, value=0, key=f"precomp_{fk}")
     
+    costo_kit_auto = 0
     if codigo_manual:
         desc_kit = st.sidebar.checkbox("📉 Descontar Repuesto del Stock", value=True, key=f"desc_kit_{fk}")
+        if desc_kit:
+            costo_kit_auto = obtener_costo_stock(codigo_manual)
+            
+    precio_compra = st.sidebar.number_input("Precio de COMPRA ($):", min_value=0, value=int(costo_kit_auto), key=f"precomp_{fk}")
+    if desc_kit and costo_kit_auto > 0:
+        st.sidebar.success(f"✔️ Costo extraído del Stock: ${costo_kit_auto:,.0f}")
 
 foto_repuesto = st.sidebar.file_uploader("📷 Foto del repuesto", type=["jpg","png","jpeg"], key=f"foto_{fk}")
 if foto_repuesto:
@@ -446,11 +462,9 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     monto_bruto = monto_limpio
     monto_neto_guardar = monto_limpio
     
-    # Matemática quirúrgica para Links y POS
     if f_pago_input in ["Efectivo", "Transferencia"]:
         monto_neto_guardar = "-"
     elif "Link" in f_pago_input: 
-        # Llama a la función global conectada al Excel
         monto_bruto = int(calcular_link_pago(monto_limpio))
     elif f_pago_input == "Getnet - 1 Pago": monto_bruto = int(round(monto_limpio * GETNET_1))
     elif f_pago_input == "Getnet - 3 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_3))
@@ -459,12 +473,11 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_3))
     elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_6))
     
-    # Le enviamos las órdenes al motor de guardado
     guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
               monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
               cod_kit_final, cod_crap_final, f_pago_input,
               estado_cliente, estado_p_prov,
-              "",  # Mantenemos el espacio vacío de la columna fantasma
+              "", 
               m_forros, forros_codigo, forros_costo, ganancia,
               desc_kit, desc_crap, desc_forros)
                       
