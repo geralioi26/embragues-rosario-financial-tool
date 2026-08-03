@@ -582,7 +582,7 @@ try:
         with st.expander("📊 Tablero de Finanzas (Mes a Mes)"):
             import pandas as pd
             import datetime
-            import calendar # Nuevo import para manejar los días de los meses
+            import calendar 
             
             # 1. Preparamos los datos de VENTAS
             df_dash = df_ver.copy()
@@ -597,23 +597,22 @@ try:
                 df_gastos['Fecha'] = pd.to_datetime(df_gastos['Fecha'], dayfirst=True, errors='coerce')
                 df_gastos['Monto $'] = pd.to_numeric(df_gastos['Monto $'], errors='coerce').fillna(0)
             except Exception:
-                # Si la hoja está vacía o falla, creamos una tabla en blanco para que no se caiga el sistema
                 df_gastos = pd.DataFrame(columns=['Fecha', 'Clasificacion', 'Monto $'])
             
             # --- NUEVO FILTRO DE MESES ---
             meses_nombres = {1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"}
             
-            # Juntamos todas las fechas que existen en tu sistema
             if not df_gastos.empty:
                 fechas_totales = pd.concat([df_dash['Fecha'], df_gastos['Fecha']]).dropna()
             else:
                 fechas_totales = df_dash['Fecha'].dropna()
                 
-            # Restamos 3 horas al servidor (Hora Argentina)
             hoy = (datetime.datetime.now() - datetime.timedelta(hours=3)).date()
             
             if not fechas_totales.empty:
-                periodos = fechas_totales.dt.to_period('M').unique().sort_values(ascending=False)
+                # --- ACÁ ESTÁ LA SOLUCIÓN AL ERROR ---
+                # Lo convertimos a Serie de Pandas para que permita usar sort_values sin chillar
+                periodos = pd.Series(fechas_totales.dt.to_period('M').unique()).sort_values(ascending=False)
                 opciones_periodos = [f"{meses_nombres[p.month]} {p.year}" for p in periodos]
                 valores_periodos = [(p.month, p.year) for p in periodos]
             else:
@@ -623,10 +622,10 @@ try:
             st.markdown("### 🗓️ Filtrar periodo")
             periodo_sel_str = st.selectbox("Seleccionar Mes a visualizar:", opciones_periodos)
             idx_sel = opciones_periodos.index(periodo_sel_str)
-            mes_actual, anio_actual = valores_periodos[idx_sel] # Reasignamos mes y año según lo que elijas
+            mes_actual, anio_actual = valores_periodos[idx_sel] 
             # -----------------------------
             
-            # 3. Calculamos tiempos del mes pasado (en base al mes seleccionado)
+            # 3. Calculamos tiempos del mes pasado 
             if mes_actual == 1:
                 mes_pasado = 12
                 anio_pasado = anio_actual - 1
@@ -638,53 +637,46 @@ try:
             df_mes_actual = df_dash[(df_dash['Fecha'].dt.month == mes_actual) & (df_dash['Fecha'].dt.year == anio_actual)]
             df_mes_pasado = df_dash[(df_dash['Fecha'].dt.month == mes_pasado) & (df_dash['Fecha'].dt.year == anio_pasado)]
             
-            # 5. Filtramos Gastos por mes y separamos los Operativos (los que achican la ganancia)
+            # 5. Filtramos Gastos por mes y separamos los Operativos
             if not df_gastos.empty:
                 gastos_actuales = df_gastos[(df_gastos['Fecha'].dt.month == mes_actual) & (df_gastos['Fecha'].dt.year == anio_actual)]
                 gastos_pasados = df_gastos[(df_gastos['Fecha'].dt.month == mes_pasado) & (df_gastos['Fecha'].dt.year == anio_pasado)]
                 
-                # Sumamos solo lo que es Gasto Operativo (fletes, AFIP, insumos, etc.)
                 op_actuales = gastos_actuales[gastos_actuales['Clasificacion'].astype(str).str.strip() == "Gasto Operativo"]['Monto $'].sum()
                 op_pasados = gastos_pasados[gastos_pasados['Clasificacion'].astype(str).str.strip() == "Gasto Operativo"]['Monto $'].sum()
             else:
                 op_actuales = 0
                 op_pasados = 0
             
-            # --- MATEMÁTICA FINANCIERA (RENTABILIDAD NETA) ---
+            # --- MATEMÁTICA FINANCIERA ---
             ganancia_bruta_actual = df_mes_actual['Ganancia'].sum()
             ganancia_bruta_pasada = df_mes_pasado['Ganancia'].sum()
             
-            # El número que manda: Ganancia Neta = Bruta - Gastos Operativos
             neta_actual = ganancia_bruta_actual - op_actuales
             neta_pasada = ganancia_bruta_pasada - op_pasados
             diferencia_neta = neta_actual - neta_pasada
             
-            # Cuentas Corrientes (Plata en la calle y deuda)
+            # Cuentas Corrientes
             df_cobrar = df_dash[df_dash['Estado_Cobro'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
             plata_en_calle = df_cobrar['Venta $'].sum()
             
-            # Deuda a proveedores por repuestos de trabajos diarios (Hoja Ventas)
             df_pagar = df_dash[df_dash['Estado_Pago_Prov'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
             deuda_diaria = df_pagar['Compra $'].sum()
             
-            # Deuda a proveedores por compra masiva de stock (Hoja Gastos)
             if not df_gastos.empty:
                 gastos_deuda = df_gastos[df_gastos['Estado_Pago'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
                 deuda_stock = gastos_deuda['Monto $'].sum()
             else:
                 deuda_stock = 0
                 
-            # Unificamos la deuda total para la tarjeta grande
             deuda_prov = deuda_diaria + deuda_stock
             
             # --- CÁLCULO DE CAPITAL INMOVILIZADO (STOCK) ---
             try:
-                # Usamos leer_fresca para asegurar que el dato de stock sea en tiempo real
                 df_stock = leer_fresca(SHEET_URL, "Inventario_Stock")
                 df_stock['Cantidad'] = pd.to_numeric(df_stock['Cantidad'], errors='coerce').fillna(0)
                 df_stock['Costo_Unitario'] = pd.to_numeric(df_stock['Costo_Unitario'], errors='coerce').fillna(0)
                 
-                # Multiplicamos cantidad por costo y sumamos el total
                 capital_inmovilizado = (df_stock['Cantidad'] * df_stock['Costo_Unitario']).sum()
             except Exception:
                 capital_inmovilizado = 0
@@ -692,7 +684,6 @@ try:
             # --- RENDERIZADO DEL TABLERO ---
             st.markdown("**💰 Radiografía Financiera (Realidad del Mes)**")
             
-            # Fila 1: Rentabilidad del Mes
             c1, c2 = st.columns(2)
             with c1:
                 st.metric(label="💵 Ganancia NETA (Bolsillo)", value=f"${neta_actual:,.0f}", delta=f"${diferencia_neta:,.0f} vs Mes Pasado")
@@ -701,7 +692,6 @@ try:
             
             st.divider()
             
-            # Fila 2: Patrimonio y Flujo de Capital
             st.markdown("**📦 Patrimonio y Flujo de Capital**")
             c3, c4, c5 = st.columns(3)
             with c3:
@@ -718,13 +708,11 @@ try:
             with col_det_1:
                 st.markdown("**🎯 ¿Quién me debe?**")
                 if not df_cobrar.empty:
-                    # --- PARCHE DE NORMALIZACIÓN ---
                     temp_cobrar = df_cobrar.copy()
                     temp_cobrar['Cliente'] = temp_cobrar['Cliente'].astype(str).str.strip().str.upper()
                     
                     detalle_clientes = temp_cobrar.groupby('Cliente')['Venta $'].sum().reset_index()
                     detalle_clientes = detalle_clientes[detalle_clientes['Venta $'] > 0]
-                    # Formato limpio para la tabla
                     st.dataframe(detalle_clientes.style.format({'Venta $': '${:,.0f}'}), hide_index=True, use_container_width=True)
                 else:
                     st.success("Nadie te debe plata. ¡Excelente!")
@@ -732,24 +720,19 @@ try:
             with col_det_2:
                 st.markdown("**🏭 ¿A quién le debo?**")
                 
-                # 1. Juntamos las deudas del trabajo diario (Hoja Ventas)
                 deudas_diarias = pd.DataFrame()
                 if not df_pagar.empty:
                     deudas_diarias = df_pagar[['Proveedor', 'Compra $']].rename(columns={'Compra $': 'Monto'})
                 
-                # 2. Juntamos las deudas de mercadería de stock (Hoja Gastos)
                 deudas_stock = pd.DataFrame()
                 if not df_gastos.empty:
-                    # ACÁ CORREGIDO: Usamos gastos_actuales pero sin filtrar por mes para que muestre TODA la deuda vigente
                     gastos_deuda = df_gastos[df_gastos['Estado_Pago'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
                     if not gastos_deuda.empty:
                         deudas_stock = gastos_deuda[['Proveedor', 'Monto $']].rename(columns={'Monto $': 'Monto'})
                 
-                # 3. Unificamos todo en una sola tabla maestra
                 df_deuda_total = pd.concat([deudas_diarias, deudas_stock]).dropna()
                 
                 if not df_deuda_total.empty:
-                    # --- PARCHE DE NORMALIZACIÓN ---
                     df_deuda_total['Proveedor'] = df_deuda_total['Proveedor'].astype(str).str.strip().str.upper()
                     
                     detalle_prov = df_deuda_total.groupby('Proveedor')['Monto'].sum().reset_index()
@@ -764,33 +747,28 @@ try:
 
             st.markdown("---")
                 
-            # --- GRÁFICO DE EVOLUCIÓN (MEJORADO Y ORDENADO) ---
+            # --- GRÁFICO DE EVOLUCIÓN ---
             st.markdown(f"**Evolución Diaria de Ganancias ({periodo_sel_str})**")
             if not df_mes_actual.empty:
-                # Agrupamos la ganancia por la FECHA EXACTA
                 grafico_datos = df_mes_actual.groupby(df_mes_actual['Fecha'].dt.date)['Ganancia'].sum()
                 
-                # Truco para saber cuántos días tiene el mes seleccionado
                 _, ultimo_dia = calendar.monthrange(anio_actual, mes_actual)
                 
-                # Si estamos viendo el mes actual, cortamos el gráfico hoy. Si vemos un mes pasado, graficamos todo el mes.
                 if mes_actual == hoy.month and anio_actual == hoy.year:
                     fin_grafico = hoy
                 else:
                     fin_grafico = datetime.date(anio_actual, mes_actual, ultimo_dia)
                     
-                # Armamos el calendario completo desde el día 1 hasta el fin del gráfico
                 rango_fechas = pd.date_range(start=datetime.date(anio_actual, mes_actual, 1), end=fin_grafico).date
                 grafico_datos = grafico_datos.reindex(rango_fechas, fill_value=0)
                 
-                # Le damos el formato exacto de fecha "Día/Mes" para el gráfico
                 grafico_datos.index = [f"{d.day:02d}/{d.month:02d}" for d in grafico_datos.index]
                 
                 st.bar_chart(grafico_datos)
             else:
                 st.info(f"No hay ventas registradas en {periodo_sel_str} para graficar.")
                 
-        # --- HISTORIAL (Tabla original) ---
+        # --- HISTORIAL ---
         st.subheader("📋 Últimos Movimientos")
         st.dataframe(df_ver.tail(5)[::-1], use_container_width=True)
         
