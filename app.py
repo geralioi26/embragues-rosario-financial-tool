@@ -135,28 +135,55 @@ def actualizar_catalogo_kits(vehiculo, descripcion, codigo, precio, marca, motor
             df[col_cod] = ""
             df[col_pre] = ""
 
-        veh_l = str(vehiculo).strip().lower()
-        cod_l = str(codigo).split('.')[0].strip()
+        vehiculo_limpio = str(vehiculo).strip()
+        veh_l = vehiculo_limpio.lower()
+        cod_limpio = str(codigo).split('.')[0].strip()
         
-        m_exacto = (df['Vehiculo'].astype(str).str.strip().str.lower() == veh_l)
+        # 1. Buscamos primero si el CÓDIGO ya existe en esta marca
+        m_codigo = (df[col_cod].astype(str).str.strip() == cod_limpio) & (cod_limpio != "")
         
-        if m_exacto.any():
-            idx = df.index[m_exacto][0]
-            df.at[idx, col_cod] = codigo
+        if m_codigo.any():
+            # EL CÓDIGO EXISTE: Actualizamos precio y agregamos vehículo si no está
+            idx = df.index[m_codigo][0]
+            veh_actual = str(df.at[idx, 'Vehiculo']).strip()
+            
+            if veh_l not in veh_actual.lower():
+                if veh_actual == "" or veh_actual.lower() == "nan":
+                    df.at[idx, 'Vehiculo'] = vehiculo_limpio
+                else:
+                    df.at[idx, 'Vehiculo'] = veh_actual + " / " + vehiculo_limpio
+            
             df.at[idx, col_pre] = precio
             if motor: df.at[idx, "Motor"] = motor
             if proveedor: df.at[idx, "Proveedor"] = proveedor
-        else:
-            fila = {c: "" for c in df.columns}
-            fila["Vehiculo"] = vehiculo
-            fila["Motor"] = motor
-            fila["Proveedor"] = proveedor
-            fila[col_cod] = codigo
-            fila[col_pre] = precio
-            df = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
             
+        else:
+            # 2. EL CÓDIGO NO EXISTE: Buscamos si el Vehículo ya tiene fila para inyectarle este código
+            m_vehiculo = (df['Vehiculo'].astype(str).str.strip().str.lower() == veh_l)
+            
+            if m_vehiculo.any():
+                idx = df.index[m_vehiculo][0]
+                df.at[idx, col_cod] = cod_limpio
+                df.at[idx, col_pre] = precio
+                if motor: df.at[idx, "Motor"] = motor
+                if proveedor: df.at[idx, "Proveedor"] = proveedor
+            else:
+                # 3. NO EXISTE NADA: Creamos una fila totalmente nueva
+                fila = {c: "" for c in df.columns}
+                fila["Vehiculo"] = vehiculo_limpio
+                fila["Motor"] = motor
+                fila["Proveedor"] = proveedor
+                fila[col_cod] = cod_limpio
+                fila[col_pre] = precio
+                df = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
+                
         conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Kits", data=df)
-        leer_hoja.clear()
+        st.cache_data.clear()
+        
+        # --- BLINDAJE DEL BUSCADOR: Destruimos la memoria RAM vieja ---
+        if "df_Catalogo_Kits" in st.session_state:
+            del st.session_state["df_Catalogo_Kits"]
+            
     except Exception as e:
         st.error(f"Falla al guardar en Kits: {e}")
 
@@ -175,26 +202,52 @@ def actualizar_catalogo_crapodinas(vehiculo, descripcion, codigo, precio, marca)
             df[col_cod] = ""
             df[col_pre] = ""
 
-        veh_l = str(vehiculo).strip().lower()
+        vehiculo_limpio = str(vehiculo).strip()
+        veh_l = vehiculo_limpio.lower()
         desc_l = str(descripcion).strip().lower()
+        cod_limpio = str(codigo).strip()
         
-        m_exacto = (df['Vehiculo'].astype(str).str.strip().str.lower() == veh_l) & \
-                   (df['Descripcion'].astype(str).str.strip().str.lower() == desc_l)
-                   
-        if m_exacto.any():
-            idx = df.index[m_exacto][0]
-            df.at[idx, col_cod] = codigo
-            df.at[idx, col_pre] = precio
-        else:
-            fila = {c: "" for c in df.columns}
-            fila["Vehiculo"] = vehiculo
-            fila["Descripcion"] = descripcion
-            fila[col_cod] = codigo
-            fila[col_pre] = precio
-            df = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
+        # 1. Buscamos primero si el CÓDIGO ya existe en esta marca
+        m_codigo = (df[col_cod].astype(str).str.strip() == cod_limpio) & (cod_limpio != "")
+        
+        if m_codigo.any():
+            # EL CÓDIGO EXISTE: Actualizamos precio y agregamos vehículo
+            idx = df.index[m_codigo][0]
+            veh_actual = str(df.at[idx, 'Vehiculo']).strip()
             
+            if veh_l not in veh_actual.lower():
+                if veh_actual == "" or veh_actual.lower() == "nan":
+                    df.at[idx, 'Vehiculo'] = vehiculo_limpio
+                else:
+                    df.at[idx, 'Vehiculo'] = veh_actual + " / " + vehiculo_limpio
+            
+            df.at[idx, col_pre] = precio
+            
+        else:
+            # 2. EL CÓDIGO NO EXISTE: Buscamos coincidencia exacta de Vehículo + Descripción
+            m_exacto = (df['Vehiculo'].astype(str).str.strip().str.lower() == veh_l) & \
+                       (df['Descripcion'].astype(str).str.strip().str.lower() == desc_l)
+                       
+            if m_exacto.any():
+                idx = df.index[m_exacto][0]
+                df.at[idx, col_cod] = cod_limpio
+                df.at[idx, col_pre] = precio
+            else:
+                # 3. NO EXISTE NADA: Creamos fila nueva
+                fila = {c: "" for c in df.columns}
+                fila["Vehiculo"] = vehiculo_limpio
+                fila["Descripcion"] = descripcion
+                fila[col_cod] = cod_limpio
+                fila[col_pre] = precio
+                df = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
+                
         conn.update(spreadsheet=SHEET_URL, worksheet="Catalogo_Crapodinas", data=df)
-        leer_hoja.clear()
+        st.cache_data.clear()
+        
+        # --- BLINDAJE DEL BUSCADOR: Destruimos la memoria RAM vieja ---
+        if "df_Catalogo_Crapodinas" in st.session_state:
+            del st.session_state["df_Catalogo_Crapodinas"]
+            
     except Exception as e:
         st.error(f"Falla al guardar en Crapodinas: {e}")
 
@@ -1448,6 +1501,13 @@ with st.expander(f"Abrir panel para cargar Códigos de {tipo_catalogo}"):
                     conn.update(spreadsheet=SHEET_URL, worksheet=nombre_hoja, data=df_cat)
                     
                     st.cache_data.clear()
+                    
+                    # --- CORRECCIÓN QUIRÚRGICA: Limpiamos la RAM del buscador ---
+                    key_a_borrar = f"df_{nombre_hoja}"
+                    if key_a_borrar in st.session_state:
+                        del st.session_state[key_a_borrar]
+                    # ------------------------------------------------------------
+                    
                     st.success(f"✅ ¡Código {accion_msj} con éxito en {tipo_catalogo}! {vehiculo_cat} {detalle_cat} | {marca_cat}: {codigo_cat}")
                     
                 except Exception as e:
