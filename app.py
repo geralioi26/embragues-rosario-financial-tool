@@ -728,9 +728,32 @@ try:
                     temp_cobrar = df_cobrar.copy()
                     temp_cobrar['Cliente'] = temp_cobrar['Cliente'].astype(str).str.strip().str.upper()
                     
+                    # 1. Calculamos la deuda bruta de Ventas
                     detalle_clientes = temp_cobrar.groupby('Cliente')['Venta $'].sum().reset_index()
+                    
+                    # 2. Leemos los canjes y los restamos para mostrar la deuda REAL
+                    try:
+                        df_saldos_dash = leer_fresca(SHEET_URL, "Saldos_y_Canjes")
+                        if not df_saldos_dash.empty:
+                            df_saldos_dash['Cliente'] = df_saldos_dash['Cliente'].astype(str).str.strip().str.upper()
+                            saldos_agrupados = df_saldos_dash.groupby('Cliente')['Monto a Favor'].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
+                            
+                            # Cruzamos los datos
+                            detalle_clientes = pd.merge(detalle_clientes, saldos_agrupados, on='Cliente', how='left').fillna(0)
+                            # Restamos
+                            detalle_clientes['Venta $'] = detalle_clientes['Venta $'] - detalle_clientes['Monto a Favor']
+                            # Limpiamos la columna extra
+                            detalle_clientes = detalle_clientes.drop(columns=['Monto a Favor'])
+                    except:
+                        pass
+                    
+                    # Filtramos a los que ya quedaron en cero
                     detalle_clientes = detalle_clientes[detalle_clientes['Venta $'] > 0]
-                    st.dataframe(detalle_clientes.style.format({'Venta $': '${:,.0f}'}), hide_index=True, use_container_width=True)
+                    
+                    if not detalle_clientes.empty:
+                        st.dataframe(detalle_clientes.style.format({'Venta $': '${:,.0f}'}), hide_index=True, use_container_width=True)
+                    else:
+                        st.success("Nadie te debe plata. ¡Excelente!")
                 else:
                     st.success("Nadie te debe plata. ¡Excelente!")
                     
