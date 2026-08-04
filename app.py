@@ -1298,15 +1298,68 @@ with st.expander("Abrir panel para ingresar mercadería"):
                 ]
                 
                 try:
-                    # Leemos el stock actual, agregamos la fila y volvemos a subir
+                    # Leemos el stock actual
                     df_stock = conn.read(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", ttl=0)
-                    df_stock.loc[len(df_stock)] = fila_nueva
-                    conn.update(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", data=df_stock)
                     
-                    st.cache_data.clear() # Limpiamos la memoria
-                    st.success(f"✅ ¡Mercadería guardada! {nueva_cantidad}x {marca_final} ({nuevo_codigo}) ingresado correctamente.")
+                    # Normalizamos código y marca para buscar sin importar mayúsculas/minúsculas
+                    cod_buscar = nuevo_codigo.strip().lower()
+                    marca_buscar = marca_final.strip().lower()
+                    
+                    # Verificamos si existe el repuesto en el Excel
+                    mask = (df_stock['Codigo'].astype(str).str.strip().str.lower() == cod_buscar) & \
+                           (df_stock['Marca'].astype(str).str.strip().str.lower() == marca_buscar)
+                           
+                    if mask.any():
+                        # ----------------------------------------------------
+                        # EL REPUESTO YA EXISTE: Sumamos e integramos vehículos
+                        # ----------------------------------------------------
+                        idx = df_stock[mask].index[0]
+                        
+                        # 1. Sumamos la cantidad nueva a la vieja
+                        cant_actual = pd.to_numeric(df_stock.at[idx, 'Cantidad'], errors='coerce')
+                        if pd.isna(cant_actual): cant_actual = 0
+                        df_stock.at[idx, 'Cantidad'] = int(cant_actual + nueva_cantidad)
+                        
+                        # 2. Inteligencia de Vehículos / Aplicación
+                        app_actual = str(df_stock.at[idx, 'Aplicacion']).strip()
+                        app_nueva = nueva_aplicacion.strip()
+                        
+                        # Si el vehículo nuevo NO está en el texto actual, lo anexamos
+                        if app_nueva.lower() not in app_actual.lower() and app_nueva != "":
+                            if app_actual == "" or app_actual.lower() == "nan":
+                                df_stock.at[idx, 'Aplicacion'] = app_nueva
+                            else:
+                                df_stock.at[idx, 'Aplicacion'] = app_actual + " / " + app_nueva
+                                
+                        # 3. Actualizamos el precio al valor más reciente que lo pagaste
+                        df_stock.at[idx, 'Costo_Unitario'] = float(nuevo_costo)
+                        
+                        # Recuperamos el texto final para el cartel de éxito
+                        app_final_cartel = df_stock.at[idx, 'Aplicacion']
+                        accion_msj = f"✅ ¡Stock actualizado inteligentemente! Ahora tenés {df_stock.at[idx, 'Cantidad']}x de {marca_final} ({nuevo_codigo}). Vehículos: {app_final_cartel}."
+                        
+                    else:
+                        # ----------------------------------------------------
+                        # EL REPUESTO NO EXISTE: Creamos fila nueva al fondo
+                        # ----------------------------------------------------
+                        fila_nueva = [
+                            nueva_categoria,
+                            marca_final,
+                            nuevo_codigo.strip(),
+                            nueva_aplicacion.strip(),
+                            int(nueva_cantidad),
+                            float(nuevo_costo)
+                        ]
+                        df_stock.loc[len(df_stock)] = fila_nueva
+                        accion_msj = f"✅ ¡Mercadería nueva guardada! Ingresaron {nueva_cantidad}x {marca_final} ({nuevo_codigo})."
+                        
+                    # Subimos el Excel actualizado y borramos caché
+                    conn.update(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", data=df_stock)
+                    st.cache_data.clear() 
+                    st.success(accion_msj)
+                    
                 except Exception as e:
-                    st.error(f"Falla al guardar en el Excel: {e}")
+                    st.error(f"⚠️ Falla al guardar en el Excel: Asegurate de que la columna de vehículos se llame exactamente 'Aplicacion' en la hoja Inventario_Stock. Error técnico: {e}")
 
 st.divider()
 st.subheader("🔄 Base de Datos Técnica (Actualización de Códigos)")
