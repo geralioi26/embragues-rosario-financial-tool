@@ -1305,7 +1305,7 @@ with st.expander("Abrir panel para ingresar mercadería"):
                     cod_buscar = nuevo_codigo.strip().lower()
                     marca_buscar = marca_final.strip().lower()
                     
-                    # Buscamos con el nombre EXACTO de la columna en tu Excel: 'Código' con tilde
+                    # Buscamos con los nombres EXACTOS de la imagen: 'Código' y 'Marca'
                     mask = (df_stock['Código'].astype(str).str.strip().str.lower() == cod_buscar) & \
                            (df_stock['Marca'].astype(str).str.strip().str.lower() == marca_buscar)
                            
@@ -1320,37 +1320,37 @@ with st.expander("Abrir panel para ingresar mercadería"):
                         if pd.isna(cant_actual): cant_actual = 0
                         df_stock.at[idx, 'Cantidad'] = int(cant_actual + nueva_cantidad)
                         
-                        # 2. Inteligencia de Vehículos / Aplicación (Fijate si lleva tilde en tu Excel)
-                        app_actual = str(df_stock.at[idx, 'Aplicacion']).strip() 
+                        # 2. Inteligencia de Vehículos ('Aplicación' con tilde)
+                        app_actual = str(df_stock.at[idx, 'Aplicación']).strip() 
                         app_nueva = nueva_aplicacion.strip()
                         
                         # Si el vehículo nuevo NO está en el texto actual, lo anexamos
                         if app_nueva.lower() not in app_actual.lower() and app_nueva != "":
                             if app_actual == "" or app_actual.lower() == "nan":
-                                df_stock.at[idx, 'Aplicacion'] = app_nueva
+                                df_stock.at[idx, 'Aplicación'] = app_nueva
                             else:
-                                df_stock.at[idx, 'Aplicacion'] = app_actual + " / " + app_nueva
+                                df_stock.at[idx, 'Aplicación'] = app_actual + " / " + app_nueva
                                 
-                        # 3. Actualizamos el precio al valor más reciente que lo pagaste
+                        # 3. Actualizamos el precio
                         df_stock.at[idx, 'Costo_Unitario'] = float(nuevo_costo)
                         
                         # Recuperamos el texto final para el cartel de éxito
-                        app_final_cartel = df_stock.at[idx, 'Aplicacion']
+                        app_final_cartel = df_stock.at[idx, 'Aplicación']
                         accion_msj = f"✅ ¡Stock actualizado inteligentemente! Ahora tenés {df_stock.at[idx, 'Cantidad']}x de {marca_final} ({nuevo_codigo}). Vehículos: {app_final_cartel}."
                         
                     else:
                         # ----------------------------------------------------
-                        # EL REPUESTO NO EXISTE: Creamos fila nueva al fondo
+                        # EL REPUESTO NO EXISTE: Creamos fila nueva (asignación explícita)
                         # ----------------------------------------------------
-                        fila_nueva = [
-                            nueva_categoria,
-                            marca_final,
-                            nuevo_codigo.strip(),
-                            nueva_aplicacion.strip(),
-                            int(nueva_cantidad),
-                            float(nuevo_costo)
-                        ]
-                        df_stock.loc[len(df_stock)] = fila_nueva
+                        nueva_fila = pd.DataFrame([{
+                            'Categoria': nueva_categoria,
+                            'Marca': marca_final,
+                            'Código': nuevo_codigo.strip(),
+                            'Aplicación': nueva_aplicacion.strip(),
+                            'Cantidad': int(nueva_cantidad),
+                            'Costo_Unitario': float(nuevo_costo)
+                        }])
+                        df_stock = pd.concat([df_stock, nueva_fila], ignore_index=True)
                         accion_msj = f"✅ ¡Mercadería nueva guardada! Ingresaron {nueva_cantidad}x {marca_final} ({nuevo_codigo})."
                         
                     # Subimos el Excel actualizado y borramos caché
