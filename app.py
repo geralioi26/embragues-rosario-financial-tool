@@ -982,33 +982,56 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
 
 
         # ==========================================
-        # OPCIÓN 2: PAGO A PROVEEDORES
+        # OPCIÓN 2: PAGO A PROVEEDORES (UNIFICADO VENTAS + GASTOS)
         # ==========================================
         elif tipo_saldo == "Pago a Proveedor":
-            df_deudas_prov = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
-            
+            # 1. Buscamos deudas en VENTAS
+            df_deudas_ventas = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
+            if not df_deudas_ventas.empty:
+                df_deudas_ventas['Origen'] = 'Ventas'
+                df_deudas_ventas['Monto_Deuda'] = pd.to_numeric(df_deudas_ventas['Compra $'], errors='coerce').fillna(0)
+                df_deudas_ventas['Vehículo'] = df_deudas_ventas['Vehículo'].astype(str)
+            else:
+                df_deudas_ventas = pd.DataFrame()
+
+            # 2. Buscamos deudas en GASTOS
+            try:
+                df_gastos = leer_fresca(SHEET_URL, "Gastos")
+                df_deudas_gastos = df_gastos[df_gastos['Estado_Pago'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
+                if not df_deudas_gastos.empty:
+                    df_deudas_gastos['Origen'] = 'Gastos'
+                    df_deudas_gastos['Monto_Deuda'] = pd.to_numeric(df_deudas_gastos['Monto $'], errors='coerce').fillna(0)
+                    df_deudas_gastos['Vehículo'] = "N/A (Stock/Inversión)" # Gastos no tiene vehículo, rellenamos
+                else:
+                    df_deudas_gastos = pd.DataFrame()
+            except:
+                df_deudas_gastos = pd.DataFrame()
+
+            # 3. Unificamos las dos tablas
+            if not df_deudas_ventas.empty or not df_deudas_gastos.empty:
+                df_deudas_prov = pd.concat([df_deudas_ventas, df_deudas_gastos], ignore_index=True)
+            else:
+                df_deudas_prov = pd.DataFrame()
+
             if not df_deudas_prov.empty:
-                col_monto = 'Compra $'
-                
-                st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor?**")
+                st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor en total? (Ventas + Gastos)**")
                 
                 df_deudas_prov['Proveedor'] = df_deudas_prov['Proveedor'].astype(str).str.strip().str.upper()
                 
-                resumen_totales_prov = df_deudas_prov.groupby('Proveedor')[col_monto].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
+                # Resumen agrupado por proveedor
+                resumen_totales_prov = df_deudas_prov.groupby('Proveedor')['Monto_Deuda'].sum().reset_index()
                 resumen_totales_prov.columns = ['Proveedor', 'Deuda Total ($)']
                 st.dataframe(resumen_totales_prov.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
                 
                 st.write("📝 **Desglose exacto de las compras pendientes:**")
-                cols_mostrar = ['Fecha', 'Proveedor', 'Vehículo', 'Detalle', col_monto]
-                cols_finales = [c for c in cols_mostrar if c in df_deudas_prov.columns]
-                
-                df_detalle_prov = df_deudas_prov[cols_finales].copy()
-                df_detalle_prov[col_monto] = pd.to_numeric(df_detalle_prov[col_monto], errors='coerce').fillna(0)
-                st.dataframe(df_detalle_prov.style.format({col_monto: '${:,.0f}'}), hide_index=True, use_container_width=True)
+                cols_mostrar = ['Origen', 'Fecha', 'Proveedor', 'Vehículo', 'Detalle', 'Monto_Deuda']
+                df_detalle_prov = df_deudas_prov[cols_mostrar].copy()
+                st.dataframe(df_detalle_prov.style.format({'Monto_Deuda': '${:,.0f}'}), hide_index=True, use_container_width=True)
                 
                 st.divider()
                 
-                opciones_prov = df_deudas_prov['Fecha'].astype(str) + " | " + df_deudas_prov['Proveedor'].astype(str) + " | " + df_deudas_prov['Vehículo'].astype(str)
+                # Para el multiselect agregamos el Origen y Detalle para que el sistema no se confunda
+                opciones_prov = df_deudas_prov['Fecha'].astype(str) + " | " + df_deudas_prov['Proveedor'].astype(str) + " | " + df_deudas_prov['Vehículo'].astype(str) + " | " + df_deudas_prov['Origen'].astype(str) + " | " + df_deudas_prov['Detalle'].astype(str)
                 seleccion_prov = st.multiselect("Seleccioná la o las deudas a pagar (podés elegir varias):", opciones_prov.tolist())
                 
                 forma_pago_prov = st.selectbox("¿Cómo le pagaste al proveedor?", ["Efectivo", "Transferencia", "Otro"])
@@ -1016,29 +1039,52 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 if st.button("💸 Registrar Pago(s)"):
                     if seleccion_prov:
                         try:
+                            # Leemos ambas hojas frescas
                             df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
+                            df_gastos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Gastos", ttl=0)
                             
+                            # Aseguramos columnas en Ventas
                             if 'Estado_Pago_Prov' not in df_ventas_actual.columns:
                                 df_ventas_actual['Estado_Pago_Prov'] = ""
-                            df_ventas_actual['Estado_Pago_Prov'] = df_ventas_actual['Estado_Pago_Prov'].astype(str)
-                            
                             if 'Forma_Pago_Prov' not in df_ventas_actual.columns:
                                 df_ventas_actual['Forma_Pago_Prov'] = ""
-                            df_ventas_actual['Forma_Pago_Prov'] = df_ventas_actual['Forma_Pago_Prov'].astype(str)
+                                
+                            # Aseguramos columnas en Gastos
+                            if 'Forma_de_pago' not in df_gastos_actual.columns:
+                                df_gastos_actual['Forma_de_pago'] = ""
                             
+                            hubo_cambios_ventas = False
+                            hubo_cambios_gastos = False
+
                             for sel in seleccion_prov:
-                                fecha_sel = sel.split(" | ")[0]
-                                prov_sel = sel.split(" | ")[1]
-                                vehiculo_sel = sel.split(" | ")[2]
+                                partes = sel.split(" | ")
+                                fecha_sel = partes[0]
+                                prov_sel = partes[1]
+                                veh_sel = partes[2]
+                                origen_sel = partes[3]
+                                det_sel = partes[4]
                                 
-                                mascara = (df_ventas_actual['Fecha'].astype(str) == fecha_sel) & \
-                                          (df_ventas_actual['Proveedor'].astype(str).str.strip().str.upper() == prov_sel) & \
-                                          (df_ventas_actual['Vehículo'].astype(str) == vehiculo_sel)
+                                if origen_sel == 'Ventas':
+                                    mascara = (df_ventas_actual['Fecha'].astype(str) == fecha_sel) & \
+                                              (df_ventas_actual['Proveedor'].astype(str).str.strip().str.upper() == prov_sel) & \
+                                              (df_ventas_actual['Vehículo'].astype(str) == veh_sel)
+                                    df_ventas_actual.loc[mascara, 'Estado_Pago_Prov'] = 'Pagado'
+                                    df_ventas_actual.loc[mascara, 'Forma_Pago_Prov'] = forma_pago_prov
+                                    hubo_cambios_ventas = True
+                                    
+                                elif origen_sel == 'Gastos':
+                                    mascara = (df_gastos_actual['Fecha'].astype(str) == fecha_sel) & \
+                                              (df_gastos_actual['Proveedor'].astype(str).str.strip().str.upper() == prov_sel) & \
+                                              (df_gastos_actual['Detalle'].astype(str) == det_sel)
+                                    df_gastos_actual.loc[mascara, 'Estado_Pago'] = 'Pagado (Contado/Transf)'
+                                    df_gastos_actual.loc[mascara, 'Forma_de_pago'] = forma_pago_prov
+                                    hubo_cambios_gastos = True
+                            
+                            if hubo_cambios_ventas:
+                                conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_ventas_actual)
+                            if hubo_cambios_gastos:
+                                conn.update(spreadsheet=SHEET_URL, worksheet="Gastos", data=df_gastos_actual)
                                 
-                                df_ventas_actual.loc[mascara, 'Estado_Pago_Prov'] = 'Pagado'
-                                df_ventas_actual.loc[mascara, 'Forma_Pago_Prov'] = forma_pago_prov
-                                
-                            conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_ventas_actual)
                             st.cache_data.clear()
                             st.success(f"✅ {len(seleccion_prov)} pago(s) registrado(s) en {forma_pago_prov}. Excel actualizado.")
                         except Exception as e:
