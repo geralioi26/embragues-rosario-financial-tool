@@ -1245,7 +1245,8 @@ with st.expander("📥 Abrir Panel UNIFICADO (Ingresa Stock y Gasto a la vez)"):
         st.markdown("### 1. Datos Comerciales (Gastos y Proveedor)")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            fecha_compra = st.date_input("Fecha de Compra")
+            # Corrección de formato de fecha a Día/Mes/Año
+            fecha_compra = st.date_input("Fecha de Compra", format="DD/MM/YYYY")
         with col2:
             proveedor_compra = st.text_input("Proveedor (Ej: Icepar, Cosimi)")
         with col3:
@@ -1261,9 +1262,10 @@ with st.expander("📥 Abrir Panel UNIFICADO (Ingresa Stock y Gasto a la vez)"):
                 "Crapodinas", "Forros", "Frenos", "Distribución", "Otros"
             ])
         with col6:
+            # Corrección de marcas: Se agregaron DBH y THE
             marca_opcion = st.selectbox("Marca", [
                 "Sachs", "LuK", "Valeo", "PHCValeo", "INA", 
-                "IAR Metal", "Termolite", "Frasle", "Otra..."
+                "IAR Metal", "Termolite", "Frasle", "DBH", "THE", "Otra..."
             ])
             marca_otra = st.text_input("Si es 'Otra...', escribila acá:")
         with col7:
@@ -1332,6 +1334,7 @@ with st.expander("📥 Abrir Panel UNIFICADO (Ingresa Stock y Gasto a la vez)"):
                     monto_total = float(cantidad_compra * precio_unitario)
                     detalle_construido = f"{cantidad_compra}x {categoria_rep} {marca_final} ({codigo_rep})"
                     
+                    # La fecha que se manda al Excel se asegura de ir en formato DD/MM/YYYY
                     nueva_fila_gasto = pd.DataFrame([{
                         'Fecha': fecha_compra.strftime("%d/%m/%Y"),
                         'Clasificacion': "Inversión en Stock",
@@ -1347,7 +1350,7 @@ with st.expander("📥 Abrir Panel UNIFICADO (Ingresa Stock y Gasto a la vez)"):
                     conn.update(spreadsheet=SHEET_URL, worksheet="Gastos", data=df_gastos)
                     
                     st.cache_data.clear()
-                    st.success(f"✅ ¡Operación exitosa! Se sumaron {cantidad_compra}x {marca_final} al stock y se registró el gasto de ${monto_total:,.2f} en Icepar/Proveedor.")
+                    st.success(f"✅ ¡Operación exitosa! Se sumaron {cantidad_compra}x {marca_final} al stock y se registró el gasto de ${monto_total:,.2f} en {proveedor_compra}.")
                     
                 except Exception as e:
                     st.error(f"⚠️ Error en la operación unificada: {e}")
