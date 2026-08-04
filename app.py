@@ -423,9 +423,13 @@ else:
         if desc_kit:
             costo_kit_auto = obtener_costo_stock(codigo_manual)
             
-    precio_compra = st.sidebar.number_input("Precio de COMPRA ($):", min_value=0, value=int(costo_kit_auto), key=f"precomp_{fk}")
+    precio_compra_input = st.sidebar.number_input("Precio de COMPRA ($):", min_value=0, value=int(costo_kit_auto), key=f"precomp_{fk}")
+    
     if desc_kit and costo_kit_auto > 0:
+        precio_compra = costo_kit_auto # Forzamos a que use el costo del stock real para la ganancia
         st.sidebar.success(f"✔️ Costo extraído del Stock: ${costo_kit_auto:,.0f}")
+    else:
+        precio_compra = precio_compra_input
 
 foto_repuesto = st.sidebar.file_uploader("📷 Foto del repuesto", type=["jpg","png","jpeg"], key=f"foto_{fk}")
 if foto_repuesto:
