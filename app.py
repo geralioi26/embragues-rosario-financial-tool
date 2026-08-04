@@ -1305,8 +1305,8 @@ with st.expander("Abrir panel para ingresar mercadería"):
                     cod_buscar = nuevo_codigo.strip().lower()
                     marca_buscar = marca_final.strip().lower()
                     
-                    # Verificamos si existe el repuesto en el Excel
-                    mask = (df_stock['Codigo'].astype(str).str.strip().str.lower() == cod_buscar) & \
+                    # Buscamos con el nombre EXACTO de la columna en tu Excel: 'Código' con tilde
+                    mask = (df_stock['Código'].astype(str).str.strip().str.lower() == cod_buscar) & \
                            (df_stock['Marca'].astype(str).str.strip().str.lower() == marca_buscar)
                            
                     if mask.any():
@@ -1320,8 +1320,8 @@ with st.expander("Abrir panel para ingresar mercadería"):
                         if pd.isna(cant_actual): cant_actual = 0
                         df_stock.at[idx, 'Cantidad'] = int(cant_actual + nueva_cantidad)
                         
-                        # 2. Inteligencia de Vehículos / Aplicación
-                        app_actual = str(df_stock.at[idx, 'Aplicacion']).strip()
+                        # 2. Inteligencia de Vehículos / Aplicación (Fijate si lleva tilde en tu Excel)
+                        app_actual = str(df_stock.at[idx, 'Aplicacion']).strip() 
                         app_nueva = nueva_aplicacion.strip()
                         
                         # Si el vehículo nuevo NO está en el texto actual, lo anexamos
@@ -1359,7 +1359,7 @@ with st.expander("Abrir panel para ingresar mercadería"):
                     st.success(accion_msj)
                     
                 except Exception as e:
-                    st.error(f"⚠️ Falla al guardar en el Excel: Asegurate de que la columna de vehículos se llame exactamente 'Aplicacion' en la hoja Inventario_Stock. Error técnico: {e}")
+                    st.error(f"⚠️ Falla al guardar en el Excel: {e}")
 
 st.divider()
 st.subheader("🔄 Base de Datos Técnica (Actualización de Códigos)")
