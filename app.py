@@ -675,7 +675,20 @@ try:
             
             # Cuentas Corrientes
             df_cobrar = df_dash[df_dash['Estado_Cobro'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
-            plata_en_calle = df_cobrar['Venta $'].sum()
+            plata_en_calle_bruta = df_cobrar['Venta $'].sum()
+            
+            # --- NUEVO: RESTAMOS LOS CANJES AL TOTAL EN LA CALLE ---
+            try:
+                df_saldos_metric = leer_fresca(SHEET_URL, "Saldos_y_Canjes")
+                if not df_saldos_metric.empty:
+                    total_canjes = pd.to_numeric(df_saldos_metric['Monto a Favor'], errors='coerce').sum()
+                else:
+                    total_canjes = 0
+            except:
+                total_canjes = 0
+                
+            plata_en_calle = plata_en_calle_bruta - total_canjes
+            # -------------------------------------------------------
             
             df_pagar = df_dash[df_dash['Estado_Pago_Prov'].astype(str).str.contains("Cuenta Corriente", case=False, na=False)]
             deuda_diaria = df_pagar['Compra $'].sum()
