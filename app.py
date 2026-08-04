@@ -1239,128 +1239,118 @@ except Exception as e:
 st.divider()
 # -----------------------------------------
 
-with st.expander("Abrir panel para ingresar mercadería"):
-    with st.form("form_nuevo_stock", clear_on_submit=True):
-        st.markdown("### 📥 Ingreso de Nueva Mercadería")
+with st.expander("📥 Abrir Panel UNIFICADO (Ingresa Stock y Gasto a la vez)"):
+    with st.form("form_ingreso_unificado", clear_on_submit=True):
         
-        # 1. Categoría
-        nueva_categoria = st.selectbox("Categoría", [
-            "Kits de Embrague", 
-            "Conjuntos de Embrague", 
-            "Volantes Bimasa", 
-            "Crapodinas", 
-            "Forros", 
-            "Frenos", 
-            "Distribución", 
-            "Otros"
-        ])
-        
-        col1, col2 = st.columns(2)
-        
+        st.markdown("### 1. Datos Comerciales (Gastos y Proveedor)")
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            # 2. Marca (Desplegable blindado)
+            fecha_compra = st.date_input("Fecha de Compra")
+        with col2:
+            proveedor_compra = st.text_input("Proveedor (Ej: Icepar, Cosimi)")
+        with col3:
+            estado_pago = st.selectbox("Estado de Pago", ["Cuenta Corriente", "Pagado (Contado/Transf)"])
+        with col4:
+            forma_pago = st.selectbox("Forma de Pago", ["Aún no pagado", "Efectivo", "Transferencia"])
+
+        st.markdown("### 2. Datos del Repuesto (Inventario)")
+        col5, col6, col7, col8 = st.columns(4)
+        with col5:
+            categoria_rep = st.selectbox("Categoría", [
+                "Kits de Embrague", "Conjuntos de Embrague", "Volantes Bimasa", 
+                "Crapodinas", "Forros", "Frenos", "Distribución", "Otros"
+            ])
+        with col6:
             marca_opcion = st.selectbox("Marca", [
                 "Sachs", "LuK", "Valeo", "PHCValeo", "INA", 
                 "IAR Metal", "Termolite", "Frasle", "Otra..."
             ])
-            # Campo de rescate por si elige "Otra..."
-            nueva_marca_otra = st.text_input("Si elegiste 'Otra...', escribila acá (Opcional)")
+            marca_otra = st.text_input("Si es 'Otra...', escribila acá:")
+        with col7:
+            codigo_rep = st.text_input("Código exacto")
+        with col8:
+            app_rep = st.text_input("Aplicación (Vehículos)")
+
+        st.markdown("### 3. Costos y Cantidades (Pesos Argentinos)")
+        col9, col10 = st.columns(2)
+        with col9:
+            cantidad_compra = st.number_input("Cantidad de piezas ingresadas", min_value=1, step=1)
+        with col10:
+            precio_unitario = st.number_input("Costo Unitario ($)", min_value=0.0, step=1000.0)
+
+        submit_unificado = st.form_submit_button("💾 Procesar Ingreso Total")
+
+        if submit_unificado:
+            marca_final = marca_otra.strip() if marca_opcion == "Otra..." else marca_opcion
             
-            # 3. Código
-            nuevo_codigo = st.text_input("Código exacto del repuesto")
-            
-        with col2:
-            # 4. Aplicación
-            nueva_aplicacion = st.text_input("Aplicación (Ej: Gol Power 1.6)")
-            # 5. Cantidad
-            nueva_cantidad = st.number_input("Cantidad", min_value=1, step=1)
-            
-        # 6. Costo Unitario en Pesos
-        nuevo_costo = st.number_input("Costo Unitario ($)", min_value=0.0, step=1000.0)
-        
-        btn_guardar_stock = st.form_submit_button("Guardar en Inventario")
-        
-        if btn_guardar_stock:
-            # Lógica para definir qué marca guardamos
-            marca_final = nueva_marca_otra.strip() if marca_opcion == "Otra..." else marca_opcion
-            
-            if not marca_final or not nuevo_codigo or not nueva_aplicacion:
-                st.warning("⚠️ Socio, completá Marca, Código y Aplicación para no ensuciar la base de datos.")
+            if proveedor_compra == "" or codigo_rep == "" or marca_final == "":
+                st.warning("⚠️ Proveedor, Marca y Código son obligatorios.")
             else:
-                # Armamos la fila exacta con las 6 columnas para el Excel
-                fila_nueva = [
-                    nueva_categoria,
-                    marca_final,
-                    nuevo_codigo.strip(),
-                    nueva_aplicacion.strip(),
-                    int(nueva_cantidad),
-                    float(nuevo_costo)
-                ]
-                
                 try:
-                    # Leemos el stock actual
+                    # -- ACCIÓN 1: STOCK --
                     df_stock = conn.read(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", ttl=0)
                     
-                    # Normalizamos código y marca para buscar sin importar mayúsculas/minúsculas
-                    cod_buscar = nuevo_codigo.strip().lower()
+                    cod_buscar = codigo_rep.strip().lower()
                     marca_buscar = marca_final.strip().lower()
                     
-                    # Buscamos con los nombres EXACTOS de la imagen: 'Código' y 'Marca'
                     mask = (df_stock['Código'].astype(str).str.strip().str.lower() == cod_buscar) & \
                            (df_stock['Marca'].astype(str).str.strip().str.lower() == marca_buscar)
                            
                     if mask.any():
-                        # ----------------------------------------------------
-                        # EL REPUESTO YA EXISTE: Sumamos e integramos vehículos
-                        # ----------------------------------------------------
                         idx = df_stock[mask].index[0]
                         
-                        # 1. Sumamos la cantidad nueva a la vieja
                         cant_actual = pd.to_numeric(df_stock.at[idx, 'Cantidad'], errors='coerce')
                         if pd.isna(cant_actual): cant_actual = 0
-                        df_stock.at[idx, 'Cantidad'] = int(cant_actual + nueva_cantidad)
+                        df_stock.at[idx, 'Cantidad'] = int(cant_actual + cantidad_compra)
                         
-                        # 2. Inteligencia de Vehículos ('Aplicación' con tilde)
                         app_actual = str(df_stock.at[idx, 'Aplicación']).strip() 
-                        app_nueva = nueva_aplicacion.strip()
-                        
-                        # Si el vehículo nuevo NO está en el texto actual, lo anexamos
+                        app_nueva = app_rep.strip()
                         if app_nueva.lower() not in app_actual.lower() and app_nueva != "":
                             if app_actual == "" or app_actual.lower() == "nan":
                                 df_stock.at[idx, 'Aplicación'] = app_nueva
                             else:
                                 df_stock.at[idx, 'Aplicación'] = app_actual + " / " + app_nueva
                                 
-                        # 3. Actualizamos el precio
-                        df_stock.at[idx, 'Costo_Unitario'] = float(nuevo_costo)
-                        
-                        # Recuperamos el texto final para el cartel de éxito
-                        app_final_cartel = df_stock.at[idx, 'Aplicación']
-                        accion_msj = f"✅ ¡Stock actualizado inteligentemente! Ahora tenés {df_stock.at[idx, 'Cantidad']}x de {marca_final} ({nuevo_codigo}). Vehículos: {app_final_cartel}."
+                        df_stock.at[idx, 'Costo_Unitario'] = float(precio_unitario)
                         
                     else:
-                        # ----------------------------------------------------
-                        # EL REPUESTO NO EXISTE: Creamos fila nueva (asignación explícita)
-                        # ----------------------------------------------------
-                        nueva_fila = pd.DataFrame([{
-                            'Categoria': nueva_categoria,
+                        nueva_fila_stock = pd.DataFrame([{
+                            'Categoria': categoria_rep,
                             'Marca': marca_final,
-                            'Código': nuevo_codigo.strip(),
-                            'Aplicación': nueva_aplicacion.strip(),
-                            'Cantidad': int(nueva_cantidad),
-                            'Costo_Unitario': float(nuevo_costo)
+                            'Código': codigo_rep.strip(),
+                            'Aplicación': app_rep.strip(),
+                            'Cantidad': int(cantidad_compra),
+                            'Costo_Unitario': float(precio_unitario)
                         }])
-                        df_stock = pd.concat([df_stock, nueva_fila], ignore_index=True)
-                        accion_msj = f"✅ ¡Mercadería nueva guardada! Ingresaron {nueva_cantidad}x {marca_final} ({nuevo_codigo})."
-                        
-                    # Subimos el Excel actualizado y borramos caché
+                        df_stock = pd.concat([df_stock, nueva_fila_stock], ignore_index=True)
+                    
                     conn.update(spreadsheet=SHEET_URL, worksheet="Inventario_Stock", data=df_stock)
-                    st.cache_data.clear() 
-                    st.success(accion_msj)
+
+                    # -- ACCIÓN 2: GASTOS --
+                    df_gastos = conn.read(spreadsheet=SHEET_URL, worksheet="Gastos", ttl=0)
+                    
+                    monto_total = float(cantidad_compra * precio_unitario)
+                    detalle_construido = f"{cantidad_compra}x {categoria_rep} {marca_final} ({codigo_rep})"
+                    
+                    nueva_fila_gasto = pd.DataFrame([{
+                        'Fecha': fecha_compra.strftime("%d/%m/%Y"),
+                        'Clasificacion': "Inversión en Stock",
+                        'Categoria': "Compra de Mercadería",
+                        'Detalle': detalle_construido,
+                        'Monto $': monto_total,
+                        'Estado_Pago': estado_pago,
+                        'Proveedor': proveedor_compra,
+                        'Forma_de_pago': forma_pago
+                    }])
+                    
+                    df_gastos = pd.concat([df_gastos, nueva_fila_gasto], ignore_index=True)
+                    conn.update(spreadsheet=SHEET_URL, worksheet="Gastos", data=df_gastos)
+                    
+                    st.cache_data.clear()
+                    st.success(f"✅ ¡Operación exitosa! Se sumaron {cantidad_compra}x {marca_final} al stock y se registró el gasto de ${monto_total:,.2f} en Icepar/Proveedor.")
                     
                 except Exception as e:
-                    st.error(f"⚠️ Falla al guardar en el Excel: {e}")
-
+                    st.error(f"⚠️ Error en la operación unificada: {e}")
 st.divider()
 st.subheader("🔄 Base de Datos Técnica (Actualización de Códigos)")
 
