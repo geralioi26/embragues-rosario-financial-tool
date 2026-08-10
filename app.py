@@ -439,6 +439,11 @@ else:
     nro_trabajo_input = ""
 
 monto_limpio = st.sidebar.number_input("Precio de VENTA ($):", min_value=0, value=0, key=f"montolimpio_{fk}")
+
+# --- NUEVO: CONTROL DE FACTURACIÓN (TERMÓMETRO) ---
+con_factura = st.sidebar.checkbox("🧾 Con Factura (Suma a Categoría C)", value=False, key=f"factura_{fk}")
+# --------------------------------------------------
+
 vehiculo_input = st.sidebar.text_input("Vehículo:", value="", key=f"vehiculo_{fk}")
 motor_input = st.sidebar.text_input("Motor:", value="", key=f"motor_{fk}")
 
@@ -532,13 +537,16 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_3))
     elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_6))
     
+    # Transformamos el tilde en un SI o NO para el Excel
+    factura_texto = "SI" if con_factura else "NO"
+    
     guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
               monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
               cod_kit_final, cod_crap_final, f_pago_input,
               estado_cliente, estado_p_prov,
               "", 
               m_forros, forros_codigo, forros_costo, ganancia,
-              desc_kit, desc_crap, desc_forros)
+              desc_kit, desc_crap, desc_forros, factura_texto)
                       
     if cod_kit_final and cat_f == "Venta":
         marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
