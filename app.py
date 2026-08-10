@@ -1090,7 +1090,7 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                                 
                                 # Anotamos la resta en la hoja de Saldos para que cuadre
                                 nueva_resta = pd.DataFrame([{
-                                    "Fecha": datetime.now().strftime("%d/%m/%Y"),
+                                    "Fecha": pd.Timestamp.now().strftime("%d/%m/%Y"),
                                     "Cliente": cliente_fifo,
                                     "Detalle": f"Liquidación automática de {boletas_pagadas} boleta(s)",
                                     "Monto a Favor": -abs(saldo_usado)
