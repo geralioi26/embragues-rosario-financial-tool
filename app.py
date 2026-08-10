@@ -1010,6 +1010,9 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 with col_c2:
                     monto_canje = st.number_input("Monto ($)", min_value=0, step=1000)
                     detalle_canje = st.text_input("Detalle (Ej: $55.000 a cuenta, Ajuste manual)")
+                    
+                    # --- NUEVA CASILLA PARA AFIP ---
+                    facturar_ingreso = st.checkbox("🧾 Declarar este ingreso (Suma a Categoría C)")
                 
                 submit_canje = st.form_submit_button("🔄 Registrar Movimiento en Cuenta")
                 
@@ -1017,13 +1020,18 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                     if monto_canje > 0 and detalle_canje != "":
                         try:
                             monto_final = monto_canje if "Suma" in tipo_movimiento else -abs(monto_canje)
+                            
+                            # Filtro de seguridad: Solo es "SI" si entra plata y tildaste la caja
+                            es_facturado = "SI" if facturar_ingreso and "Suma" in tipo_movimiento else "NO"
+                            
                             df_saldos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
                             
                             nueva_fila = pd.DataFrame([{
                                 "Fecha": fecha_canje.strftime("%d/%m/%Y"),
                                 "Cliente": cliente_canje,
                                 "Detalle": detalle_canje,
-                                "Monto a Favor": monto_final
+                                "Monto a Favor": monto_final,
+                                "Facturado": es_facturado
                             }])
                             
                             if df_saldos_actual.empty or len(df_saldos_actual.columns) == 0:
@@ -1567,10 +1575,10 @@ st.info("Actualizá tu facturación previa y el tope de la categoría. El sistem
 
 col_t1, col_t2 = st.columns(2)
 with col_t1:
-    facturacion_previa = st.number_input("Facturación Previa 2026 ($):", min_value=0, value=0, step=100000, help="Ingresá lo que ya tenés facturado en el año hasta hoy.")
+    facturacion_previa = st.number_input("Facturación Previa 2026 ($):", min_value=0, value=3344772, step=100000, help="Ingresá lo que ya tenés facturado en el año hasta hoy.")
 with col_t2:
     # El tope se puede modificar si ARCA/AFIP actualiza las escalas
-    tope_cat_c = st.number_input("Tope Anual Categoría C ($):", min_value=1, value=9765000, step=100000)
+    tope_cat_c = st.number_input("Tope Anual Categoría C ($):", min_value=1, value=24670494, step=100000)
 
 # Calculamos lo facturado desde la App
 try:
