@@ -897,7 +897,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
     try:
         df_ventas = leer_fresca(SHEET_URL, "Ventas")
         
-        # Leemos la nueva hoja de canjes (si falla o está vacía, creamos una estructura base en el aire)
         try:
             df_saldos = leer_fresca(SHEET_URL, "Saldos_y_Canjes")
         except:
@@ -911,7 +910,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
             
             st.write("📊 **Resumen: ¿Cuánto nos debe cada cliente REALMENTE?**")
             
-            # 1. Calculamos lo que deben por trabajos (Ventas)
             df_deudas['Cliente'] = df_deudas['Cliente'].astype(str).str.strip().str.upper()
             if not df_deudas.empty:
                 resumen_deudas = df_deudas.groupby('Cliente')['Venta $'].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
@@ -919,7 +917,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
             else:
                 resumen_deudas = pd.DataFrame(columns=['Cliente', 'Deuda por Trabajos ($)'])
             
-            # 2. Calculamos los saldos a favor (de la hoja nueva Saldos_y_Canjes)
             if not df_saldos.empty:
                 df_saldos['Cliente'] = df_saldos['Cliente'].astype(str).str.strip().str.upper()
                 resumen_a_favor = df_saldos.groupby('Cliente')['Monto a Favor'].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).reset_index()
@@ -927,12 +924,10 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
             else:
                 resumen_a_favor = pd.DataFrame(columns=['Cliente', 'Saldo a Favor ($)'])
             
-            # 3. Cruzamos los datos y restamos para sacar la deuda real
             if not resumen_deudas.empty or not resumen_a_favor.empty:
                 resumen_total = pd.merge(resumen_deudas, resumen_a_favor, on='Cliente', how='outer').fillna(0)
                 resumen_total['DEUDA REAL FINAL ($)'] = resumen_total['Deuda por Trabajos ($)'] - resumen_total['Saldo a Favor ($)']
                 
-                # Filtramos para no mostrar clientes que están en cero perfecto
                 resumen_total = resumen_total[resumen_total['DEUDA REAL FINAL ($)'] != 0]
                 
                 st.dataframe(resumen_total.style.format({
@@ -945,9 +940,8 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
             
             st.divider()
             
-            # --- SECCIÓN: COBROS Y COMPENSACIONES ---
             if not df_deudas.empty:
-                st.write("📝 **Desglose de trabajos pendientes (Para cobrar o Compensar):**")
+                st.write("📝 **Desglose de trabajos pendientes (Para cobrar sueltos):**")
                 cols_mostrar = ['Fecha', 'Cliente', 'Vehículo', 'Detalle', 'Venta $']
                 cols_finales = [c for c in cols_mostrar if c in df_deudas.columns]
                 
@@ -958,67 +952,28 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
                 seleccion = st.multiselect("Seleccioná la o las deudas a procesar:", opciones.tolist())
                 
-                forma_cobro = st.selectbox("¿Cómo saldamos esto?", [
-                    "Efectivo", 
-                    "Transferencia", 
-                    "Débito", 
-                    "Compensar usando su Saldo a Favor", 
-                    "Otro"
-                ])
+                forma_cobro = st.selectbox("¿Cómo saldamos esto?", ["Efectivo", "Transferencia", "Débito", "Otro"])
                 
-                if st.button("💰 Procesar Cobro / Compensación"):
+                if st.button("💰 Procesar Cobro"):
                     if seleccion:
                         try:
                             df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
-                            
-                            monto_total_compensado = 0
-                            cliente_compensado = ""
                             
                             for sel in seleccion:
                                 fecha_sel = sel.split(" | ")[0]
                                 cliente_sel = sel.split(" | ")[1]
                                 vehiculo_sel = sel.split(" | ")[2]
                                 
-                                cliente_compensado = cliente_sel # Guardamos el nombre
-                                
                                 mascara = (df_ventas_actual['Fecha'].astype(str) == fecha_sel) & \
                                           (df_ventas_actual['Cliente'].astype(str).str.strip().str.upper() == cliente_sel.upper()) & \
                                           (df_ventas_actual['Vehículo'].astype(str) == vehiculo_sel)
                                 
-                                # Si compensa con saldo, calculamos cuánta plata hay que restarle al cliente
-                                if forma_cobro == "Compensar usando su Saldo a Favor":
-                                    valor_trabajo = pd.to_numeric(df_ventas_actual.loc[mascara, 'Venta $'], errors='coerce').sum()
-                                    monto_total_compensado += valor_trabajo
-                                
                                 df_ventas_actual.loc[mascara, 'Estado_Cobro'] = 'Pagado'
                                 df_ventas_actual.loc[mascara, 'Forma_de_pago'] = forma_cobro
                                 
-                            # 1. Guardamos la tabla de Ventas
                             conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_ventas_actual)
-                            
-                            # 2. Si compensó, inyectamos un saldo NEGATIVO automático para ajustar las cuentas
-                            if forma_cobro == "Compensar usando su Saldo a Favor" and monto_total_compensado > 0:
-                                df_saldos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
-                                
-                                nueva_fila = pd.DataFrame([{
-                                    "Fecha": datetime.now().strftime("%d/%m/%Y"),
-                                    "Cliente": cliente_compensado,
-                                    "Detalle": f"Compensación automática de trabajos",
-                                    "Monto a Favor": -abs(monto_total_compensado)  # Acá está la magia: entra restando
-                                }])
-                                
-                                if df_saldos_actual.empty or len(df_saldos_actual.columns) == 0:
-                                    df_actualizado = nueva_fila
-                                else:
-                                    df_actualizado = pd.concat([df_saldos_actual, nueva_fila], ignore_index=True)
-                                    
-                                conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_actualizado)
-                            
                             st.cache_data.clear()
-                            if forma_cobro == "Compensar usando su Saldo a Favor":
-                                st.success(f"✅ ¡Cuentas ajustadas! Se marcaron los trabajos como pagados y se restaron ${monto_total_compensado:,.0f} del Saldo de {cliente_compensado}.")
-                            else:
-                                st.success(f"✅ {len(seleccion)} cobro(s) registrado(s) en {forma_cobro}. Excel actualizado.")
+                            st.success(f"✅ {len(seleccion)} cobro(s) registrado(s) en {forma_cobro}. Excel actualizado.")
                                 
                         except Exception as e:
                             st.error(f"⚠️ Error al actualizar cobros: {e}")
@@ -1026,11 +981,11 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                         st.warning("⚠️ Seleccioná al menos una deuda para procesar.")
 
             # ==========================================
-            # --- PANEL DE AJUSTES MANUALES ---
+            # --- PANEL DE AJUSTES MANUALES Y FIFO ---
             # ==========================================
             st.markdown("---")
             st.markdown("### 🔄 Entregas a Cuenta y Ajustes Manuales")
-            st.info("Anotá pagos parciales a cuenta o hacé ajustes para sumar/restar saldos manualmente.")
+            st.info("Anotá entregas de plata a cuenta. Después usá el botón azul para que el sistema cancele boletas viejas automáticamente.")
             
             lista_clientes = resumen_total['Cliente'].tolist() if 'resumen_total' in locals() and not resumen_total.empty else []
             if "REPUESTOS ARIEL" not in lista_clientes:
@@ -1054,9 +1009,7 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 if submit_canje:
                     if monto_canje > 0 and detalle_canje != "":
                         try:
-                            # Si es resta, le clavamos el símbolo negativo
                             monto_final = monto_canje if "Suma" in tipo_movimiento else -abs(monto_canje)
-                            
                             df_saldos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
                             
                             nueva_fila = pd.DataFrame([{
@@ -1082,6 +1035,76 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                             st.error(f"⚠️ Error al guardar el ajuste: {e}")
                     else:
                         st.warning("⚠️ Ingresá un monto mayor a $0 y detallá de qué se trata.")
+
+            # --- BOTÓN INTELIGENTE (FIFO) ---
+            st.markdown("#### 🤖 Liquidación Automática de Boletas")
+            cliente_fifo = st.selectbox("Seleccionar cliente para liquidar boletas con su Saldo a Favor:", lista_clientes, key="cliente_fifo")
+            
+            if st.button(f"⚡ Liquidar Trabajos Viejos de {cliente_fifo} usando su Saldo", type="primary"):
+                try:
+                    df_v = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
+                    df_s = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
+                    
+                    # 1. Chequeamos si el cliente tiene saldo a favor
+                    saldo_disp = 0
+                    if not df_s.empty:
+                        mask_s = df_s['Cliente'].astype(str).str.strip().str.upper() == cliente_fifo.upper()
+                        saldo_disp = pd.to_numeric(df_s.loc[mask_s, 'Monto a Favor'], errors='coerce').sum()
+                        
+                    if saldo_disp <= 0:
+                        st.warning(f"⚠️ {cliente_fifo} no tiene Saldo a Favor disponible para compensar boletas.")
+                    else:
+                        # 2. Agarramos los trabajos pendientes del cliente
+                        mask_v = (df_v['Cliente'].astype(str).str.strip().str.upper() == cliente_fifo.upper()) & \
+                                 (df_v['Estado_Cobro'].astype(str).str.strip().str.lower() == "cuenta corriente")
+                        
+                        trabajos_pendientes = df_v[mask_v].copy()
+                        
+                        if trabajos_pendientes.empty:
+                            st.info(f"✅ {cliente_fifo} no tiene trabajos en Cuenta Corriente para pagar.")
+                        else:
+                            # Aseguramos que la columna de plata sea un número
+                            trabajos_pendientes['Venta $'] = pd.to_numeric(trabajos_pendientes['Venta $'], errors='coerce').fillna(0)
+                            
+                            saldo_usado = 0
+                            boletas_pagadas = 0
+                            
+                            # 3. Empieza la magia (lee desde arriba hacia abajo, o sea desde el más viejo)
+                            for idx, row in trabajos_pendientes.iterrows():
+                                costo_trabajo = row['Venta $']
+                                
+                                if costo_trabajo > 0 and saldo_disp >= costo_trabajo:
+                                    # Alcanza la plata: Pagamos la boleta
+                                    df_v.at[idx, 'Estado_Cobro'] = 'Pagado'
+                                    df_v.at[idx, 'Forma_de_pago'] = 'Compensado con Saldo'
+                                    saldo_disp -= costo_trabajo
+                                    saldo_usado += costo_trabajo
+                                    boletas_pagadas += 1
+                                else:
+                                    # No alcanza para cubrir ESTA boleta entera, frena la máquina.
+                                    break
+                                    
+                            if boletas_pagadas > 0:
+                                # Guardamos los cambios en Ventas
+                                conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_v)
+                                
+                                # Anotamos la resta en la hoja de Saldos para que cuadre
+                                nueva_resta = pd.DataFrame([{
+                                    "Fecha": datetime.now().strftime("%d/%m/%Y"),
+                                    "Cliente": cliente_fifo,
+                                    "Detalle": f"Liquidación automática de {boletas_pagadas} boleta(s)",
+                                    "Monto a Favor": -abs(saldo_usado)
+                                }])
+                                df_s_actualizado = pd.concat([df_s, nueva_resta], ignore_index=True)
+                                conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_s_actualizado)
+                                
+                                st.cache_data.clear()
+                                st.success(f"🔥 ¡Éxito! El sistema liquidó automáticamente {boletas_pagadas} boleta(s) viejas usando ${saldo_usado:,.0f} del saldo a favor de {cliente_fifo}.")
+                            else:
+                                st.warning(f"⚠️ El saldo a favor de {cliente_fifo} (${saldo_disp:,.0f}) no alcanza para cubrir la totalidad de su boleta más vieja.")
+                
+                except Exception as e:
+                    st.error(f"⚠️ Fallo crítico en la automatización: {e}")
 
         # ==========================================
         # OPCIÓN 2: PAGO A PROVEEDORES (UNIFICADO VENTAS + GASTOS)
@@ -1120,7 +1143,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 
                 df_deudas_prov['Proveedor'] = df_deudas_prov['Proveedor'].astype(str).str.strip().str.upper()
                 
-                # Resumen agrupado por proveedor
                 resumen_totales_prov = df_deudas_prov.groupby('Proveedor')['Monto_Deuda'].sum().reset_index()
                 resumen_totales_prov.columns = ['Proveedor', 'Deuda Total ($)']
                 st.dataframe(resumen_totales_prov.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
@@ -1132,7 +1154,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 
                 st.divider()
                 
-                # Para el multiselect agregamos el Origen y Detalle para que el sistema no se confunda
                 opciones_prov = df_deudas_prov['Fecha'].astype(str) + " | " + df_deudas_prov['Proveedor'].astype(str) + " | " + df_deudas_prov['Vehículo'].astype(str) + " | " + df_deudas_prov['Origen'].astype(str) + " | " + df_deudas_prov['Detalle'].astype(str)
                 seleccion_prov = st.multiselect("Seleccioná la o las deudas a pagar (podés elegir varias):", opciones_prov.tolist())
                 
@@ -1141,17 +1162,14 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 if st.button("💸 Registrar Pago(s)"):
                     if seleccion_prov:
                         try:
-                            # Leemos ambas hojas frescas
                             df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
                             df_gastos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Gastos", ttl=0)
                             
-                            # Aseguramos columnas en Ventas
                             if 'Estado_Pago_Prov' not in df_ventas_actual.columns:
                                 df_ventas_actual['Estado_Pago_Prov'] = ""
                             if 'Forma_Pago_Prov' not in df_ventas_actual.columns:
                                 df_ventas_actual['Forma_Pago_Prov'] = ""
                                 
-                            # Aseguramos columnas en Gastos
                             if 'Forma_de_pago' not in df_gastos_actual.columns:
                                 df_gastos_actual['Forma_de_pago'] = ""
                             
@@ -1199,61 +1217,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 
     except Exception as e:
         st.error(f"⚠️ Error al cargar las deudas: {e}")
-st.divider()
-st.subheader("💸 Gestión de Gastos e Inversiones")
-
-with st.expander("Abrir panel para registrar una salida de dinero"):
-    with st.form("form_gastos", clear_on_submit=False):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fecha_gasto = st.date_input("Fecha", format="DD/MM/YYYY")
-            clasificacion = st.selectbox("Clasificación (¡Clave para los números!)", ["Gasto Operativo", "Inversión en Stock"])
-            categoria = st.selectbox("Categoría", ["Cadetería / Fletes", "Impuestos / AFIP", "Compra de Mercadería", "Insumos de Taller", "Otros"])
-            proveedor = st.text_input("Proveedor o Destinatario (Ej: Icepar, Juan Cadete)")
-            
-        with col2:
-            detalle = st.text_input("Detalle exacto (¿Qué se pagó?)")
-            monto = st.number_input("Monto ($)", min_value=0, step=1000)
-            estado_pago = st.selectbox("Estado del Pago", ["Pagado (Contado/Transf)", "Cuenta Corriente"])
-            # Agregamos el selector de forma de pago del gasto
-            forma_pago_gasto = st.selectbox("Forma de Pago", ["Efectivo", "Transferencia", "Aún no pagado"])
-            
-        submit_gasto = st.form_submit_button("💾 Guardar Registro")
-        
-        if submit_gasto:
-            if monto > 0 and detalle != "":
-                fecha_str = fecha_gasto.strftime("%d/%m/%Y")
-                
-                # Sumamos la forma de pago al final del paquete de datos
-                datos_gasto = [fecha_str, clasificacion, categoria, detalle, monto, estado_pago, proveedor, forma_pago_gasto]
-                
-                try:
-                    df_gastos = conn.read(spreadsheet=SHEET_URL, worksheet="Gastos", ttl=0)
-                    
-                    # ACTUALIZAMOS LAS COLUMNAS ESTRICTAS (Ahora son 8)
-                    columnas_estrictas = ["Fecha", "Clasificacion", "Categoria", "Detalle", "Monto $", "Estado_Pago", "Proveedor", "Forma_de_pago"]
-                    
-                    nueva_fila = pd.DataFrame([datos_gasto], columns=columnas_estrictas)
-                    
-                    if df_gastos.empty:
-                        df_gastos = pd.DataFrame(columns=columnas_estrictas)
-                    else:
-                        # Si tu hoja vieja de gastos no tiene la columna Forma_de_pago, se la agregamos en blanco para que no falle
-                        if "Forma_de_pago" not in df_gastos.columns:
-                            df_gastos["Forma_de_pago"] = ""
-                        df_gastos = df_gastos[columnas_estrictas]
-                    
-                    df_actualizado = pd.concat([df_gastos, nueva_fila], ignore_index=True)
-                    conn.update(spreadsheet=SHEET_URL, worksheet="Gastos", data=df_actualizado)
-                    st.cache_data.clear()
-                    st.success(f"✅ ¡Gasto registrado con éxito! {detalle} por ${monto:,.0f} en {forma_pago_gasto}.")
-                    
-                except Exception as e:
-                    st.error(f"⚠️ Error al inyectar los datos en el Excel: {e}")
-                
-            else:
-                st.warning("⚠️ El monto debe ser mayor a $0 y el detalle no puede estar vacío.")
 
 
 # 12. BUSCADOR GLOBAL INTELIGENTE (Optimizado con RAM - Session State)
