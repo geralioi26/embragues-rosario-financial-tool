@@ -1100,6 +1100,10 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                                 
                                 st.cache_data.clear()
                                 st.success(f"🔥 ¡Éxito! El sistema liquidó automáticamente {boletas_pagadas} boleta(s) viejas usando ${saldo_usado:,.0f} del saldo a favor de {cliente_fifo}.")
+                                
+                                import time
+                                time.sleep(1.5)
+                                st.rerun()
                             else:
                                 st.warning(f"⚠️ El saldo a favor de {cliente_fifo} (${saldo_disp:,.0f}) no alcanza para cubrir la totalidad de su boleta más vieja.")
                 
