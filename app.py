@@ -3,6 +3,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 import urllib.parse
+import re
+import unicodedata
 
 # 1. IDENTIDAD
 st.set_page_config(page_title="Embragues Rosario", page_icon="logo.png")
@@ -1207,14 +1209,16 @@ with st.expander("Abrir panel para registrar una salida de dinero"):
                 st.warning("⚠️ El monto debe ser mayor a $0 y el detalle no puede estar vacío.")
 
 
-# 12. BUSCADOR DE CATÁLOGO (Optimizado con RAM - Session State)
+# 12. BUSCADOR GLOBAL INTELIGENTE (Optimizado con RAM - Session State)
 st.divider()
-st.header("🔍 Consultar Catálogo")
+st.header("🔍 Consultar Catálogo y Stock")
 
+# 1. Agregamos TODAS las hojas, conectando lo técnico con el galpón
 hoja_map = {
     "Embragues (Kits)": "Catalogo_Kits", 
     "Crapodinas": "Catalogo_Crapodinas", 
-    "Distribución": "Catalogo_Distribucion"
+    "Distribución": "Catalogo_Distribucion",
+    "Stock Físico (Galpón)": "Inventario_Stock"
 }
 
 tipo_busqueda = st.radio("¿Qué estás buscando?", list(hoja_map.keys()), horizontal=True)
@@ -1229,27 +1233,41 @@ if session_key not in st.session_state:
 # A partir de acá, trabajamos 100% con la memoria RAM, sin pedirle datos a Google
 df_b = st.session_state[session_key]
 
-busqueda = st.text_input("✍️ Modelo de Auto o Código:")
+busqueda = st.text_input("✍️ Búsqueda Inteligente (Ej: peugeot c4 bimasa):")
 
-# Si hay texto escrito, filtramos. Si está vacío (o se borró), no hace nada.
+# Si hay texto escrito, filtramos.
 if busqueda:
     if not df_b.empty:
-        palabras = busqueda.lower().split()
-        mask = pd.Series(True, index=df_b.index)
+        # --- LÓGICA DE NORMALIZACIÓN ---
+        # 1. Limpiamos lo que tipeaste (sacamos tildes, pasamos a minúscula y cambiamos barras por espacios)
+        busqueda_limpia = busqueda.lower()
+        busqueda_limpia = re.sub(r'[/_\-]', ' ', busqueda_limpia)
+        busqueda_limpia = ''.join(c for c in unicodedata.normalize('NFD', busqueda_limpia) if unicodedata.category(c) != 'Mn')
+        palabras_buscadas = busqueda_limpia.split()
         
-        for palabra in palabras:
-            mask &= df_b.fillna("").astype(str).apply(
-                lambda x: x.str.contains(palabra, case=False, na=False)
-            ).any(axis=1)
+        # 2. Limpiamos internamente el Excel en tiempo real (unimos toda la fila, sacamos tildes y símbolos)
+        texto_filas = df_b.fillna("").astype(str).apply(lambda x: ' '.join(x), axis=1).str.lower()
+        texto_filas = texto_filas.str.replace(r'[/_\-]', ' ', regex=True)
+        texto_filas = texto_filas.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
+        
+        # 3. Cruzamos los datos: exigimos que TODAS las palabras que tipeaste estén en la fila
+        mask = pd.Series(True, index=df_b.index)
+        for palabra in palabras_buscadas:
+            mask &= texto_filas.str.contains(palabra, case=False, regex=False)
             
         df_filtrado = df_b[mask]
         
+        # --- RENDERIZADO EN PANTALLA ---
         if not df_filtrado.empty:
-            st.dataframe(df_filtrado, use_container_width=True)
+            # Si estás buscando en el stock, le damos formato de Pesos al costo unitario para que se vea profesional
+            if tipo_busqueda == "Stock Físico (Galpón)" and 'Costo_Unitario' in df_filtrado.columns:
+                st.dataframe(df_filtrado.style.format({'Costo_Unitario': '${:,.0f}', 'Cantidad': '{:.0f}'}), use_container_width=True, hide_index=True)
+            else:
+                st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
         else:
-            st.info("No encontré resultados.")
+            st.info("No encontré resultados con esos datos.")
     else:
-        st.warning("El catálogo seleccionado está vacío en el Excel.")
+        st.warning("La base de datos seleccionada está vacía.")
 
 st.divider()
 st.subheader("📦 Gestión de Inventario y Stock")
