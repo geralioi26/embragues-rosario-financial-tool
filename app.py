@@ -945,9 +945,9 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
             
             st.divider()
             
-            # --- SECCIÓN: COBROS TRADICIONALES ---
+            # --- SECCIÓN: COBROS Y COMPENSACIONES ---
             if not df_deudas.empty:
-                st.write("📝 **Desglose de trabajos pendientes (Para cobrar en Efectivo/Transf):**")
+                st.write("📝 **Desglose de trabajos pendientes (Para cobrar o Compensar):**")
                 cols_mostrar = ['Fecha', 'Cliente', 'Vehículo', 'Detalle', 'Venta $']
                 cols_finales = [c for c in cols_mostrar if c in df_deudas.columns]
                 
@@ -956,72 +956,116 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 st.dataframe(df_detalle.style.format({'Venta $': '${:,.0f}'}), hide_index=True, use_container_width=True)
                 
                 opciones = df_deudas['Fecha'].astype(str) + " | " + df_deudas['Cliente'].astype(str) + " | " + df_deudas['Vehículo'].astype(str)
-                seleccion = st.multiselect("Seleccioná la o las deudas a cobrar (podés elegir varias):", opciones.tolist())
+                seleccion = st.multiselect("Seleccioná la o las deudas a procesar:", opciones.tolist())
                 
-                forma_cobro = st.selectbox("¿Cómo te pagó el cliente?", ["Efectivo", "Transferencia", "Débito", "Otro"])
+                forma_cobro = st.selectbox("¿Cómo saldamos esto?", [
+                    "Efectivo", 
+                    "Transferencia", 
+                    "Débito", 
+                    "Compensar usando su Saldo a Favor", 
+                    "Otro"
+                ])
                 
-                if st.button("💰 Registrar Cobro(s)"):
+                if st.button("💰 Procesar Cobro / Compensación"):
                     if seleccion:
                         try:
                             df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
+                            
+                            monto_total_compensado = 0
+                            cliente_compensado = ""
+                            
                             for sel in seleccion:
                                 fecha_sel = sel.split(" | ")[0]
                                 cliente_sel = sel.split(" | ")[1]
                                 vehiculo_sel = sel.split(" | ")[2]
                                 
+                                cliente_compensado = cliente_sel # Guardamos el nombre
+                                
                                 mascara = (df_ventas_actual['Fecha'].astype(str) == fecha_sel) & \
-                                          (df_ventas_actual['Cliente'].astype(str).str.strip().str.upper() == cliente_sel) & \
+                                          (df_ventas_actual['Cliente'].astype(str).str.strip().str.upper() == cliente_sel.upper()) & \
                                           (df_ventas_actual['Vehículo'].astype(str) == vehiculo_sel)
+                                
+                                # Si compensa con saldo, calculamos cuánta plata hay que restarle al cliente
+                                if forma_cobro == "Compensar usando su Saldo a Favor":
+                                    valor_trabajo = pd.to_numeric(df_ventas_actual.loc[mascara, 'Venta $'], errors='coerce').sum()
+                                    monto_total_compensado += valor_trabajo
                                 
                                 df_ventas_actual.loc[mascara, 'Estado_Cobro'] = 'Pagado'
                                 df_ventas_actual.loc[mascara, 'Forma_de_pago'] = forma_cobro
                                 
+                            # 1. Guardamos la tabla de Ventas
                             conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_ventas_actual)
+                            
+                            # 2. Si compensó, inyectamos un saldo NEGATIVO automático para ajustar las cuentas
+                            if forma_cobro == "Compensar usando su Saldo a Favor" and monto_total_compensado > 0:
+                                df_saldos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
+                                
+                                nueva_fila = pd.DataFrame([{
+                                    "Fecha": datetime.now().strftime("%d/%m/%Y"),
+                                    "Cliente": cliente_compensado,
+                                    "Detalle": f"Compensación automática de trabajos",
+                                    "Monto a Favor": -abs(monto_total_compensado)  # Acá está la magia: entra restando
+                                }])
+                                
+                                if df_saldos_actual.empty or len(df_saldos_actual.columns) == 0:
+                                    df_actualizado = nueva_fila
+                                else:
+                                    df_actualizado = pd.concat([df_saldos_actual, nueva_fila], ignore_index=True)
+                                    
+                                conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_actualizado)
+                            
                             st.cache_data.clear()
-                            st.success(f"✅ {len(seleccion)} cobro(s) registrado(s) en {forma_cobro}. Excel actualizado.")
+                            if forma_cobro == "Compensar usando su Saldo a Favor":
+                                st.success(f"✅ ¡Cuentas ajustadas! Se marcaron los trabajos como pagados y se restaron ${monto_total_compensado:,.0f} del Saldo de {cliente_compensado}.")
+                            else:
+                                st.success(f"✅ {len(seleccion)} cobro(s) registrado(s) en {forma_cobro}. Excel actualizado.")
+                                
                         except Exception as e:
                             st.error(f"⚠️ Error al actualizar cobros: {e}")
                     else:
-                        st.warning("⚠️ Seleccioná al menos una deuda para cobrar.")
+                        st.warning("⚠️ Seleccioná al menos una deuda para procesar.")
 
             # ==========================================
-            # --- EL PANEL DE CANJES QUE TE GUSTA ---
+            # --- PANEL DE AJUSTES MANUALES ---
             # ==========================================
             st.markdown("---")
-            st.markdown("### 🔄 Registrar Canje / Descuento por Repuestos")
-            st.info("Usá esta opción si un cliente te entregó repuestos a cuenta. Esto se guarda en tu hoja 'Saldos_y_Canjes' para restar de su deuda sin afectar tus Ventas del mes.")
+            st.markdown("### 🔄 Entregas a Cuenta y Ajustes Manuales")
+            st.info("Anotá pagos parciales a cuenta o hacé ajustes para sumar/restar saldos manualmente.")
             
-            # Sacamos la lista de clientes del resumen (los que te deben)
             lista_clientes = resumen_total['Cliente'].tolist() if 'resumen_total' in locals() and not resumen_total.empty else []
             if "REPUESTOS ARIEL" not in lista_clientes:
-                lista_clientes.append("REPUESTOS ARIEL") # Lo forzamos por si justo un día no te debe nada pero te deja mercadería
+                lista_clientes.append("REPUESTOS ARIEL")
                 
             with st.form("form_canje", clear_on_submit=True):
                 col_c1, col_c2 = st.columns(2)
                 with col_c1:
-                    fecha_canje = st.date_input("Fecha del Canje", format="DD/MM/YYYY")
-                    cliente_canje = st.selectbox("¿A qué cliente le descontamos?", lista_clientes)
-                    monto_canje = st.number_input("Monto exacto a descontar ($)", min_value=0, step=1000)
+                    fecha_canje = st.date_input("Fecha del Movimiento", format="DD/MM/YYYY")
+                    cliente_canje = st.selectbox("¿A qué cliente le ajustamos la cuenta?", lista_clientes)
+                    tipo_movimiento = st.radio("Acción a realizar:", [
+                        "Suma a Favor (Entregó Plata a cuenta o Mercadería)", 
+                        "Restar del Saldo (Ajuste o compensación manual)"
+                    ])
                 with col_c2:
-                    detalle_canje = st.text_input("Detalle del Repuesto (Ej: Crapodina de empuje)")
+                    monto_canje = st.number_input("Monto ($)", min_value=0, step=1000)
+                    detalle_canje = st.text_input("Detalle (Ej: $55.000 a cuenta, Ajuste manual)")
                 
-                submit_canje = st.form_submit_button("🔄 Aplicar Descuento / Canje")
+                submit_canje = st.form_submit_button("🔄 Registrar Movimiento en Cuenta")
                 
                 if submit_canje:
                     if monto_canje > 0 and detalle_canje != "":
                         try:
-                            # 1. Leemos tu HOJA NUEVA
+                            # Si es resta, le clavamos el símbolo negativo
+                            monto_final = monto_canje if "Suma" in tipo_movimiento else -abs(monto_canje)
+                            
                             df_saldos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
                             
-                            # 2. Armamos la fila con los 4 datos clave
                             nueva_fila = pd.DataFrame([{
                                 "Fecha": fecha_canje.strftime("%d/%m/%Y"),
                                 "Cliente": cliente_canje,
                                 "Detalle": detalle_canje,
-                                "Monto a Favor": monto_canje
+                                "Monto a Favor": monto_final
                             }])
                             
-                            # 3. Concatenamos y guardamos (si no tenía columnas, asume las de nueva_fila)
                             if df_saldos_actual.empty or len(df_saldos_actual.columns) == 0:
                                 df_actualizado = nueva_fila
                             else:
@@ -1029,12 +1073,15 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                             
                             conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_actualizado)
                             st.cache_data.clear()
-                            st.success(f"✅ ¡Canje guardado con éxito! Se restaron ${monto_canje:,.0f} de la deuda de {cliente_canje}. Tu hoja de Ventas sigue intacta.")
+                            
+                            if "Suma" in tipo_movimiento:
+                                st.success(f"✅ ¡Guardado! Se agregaron ${monto_canje:,.0f} a favor de {cliente_canje}.")
+                            else:
+                                st.success(f"✅ ¡Ajuste aplicado! Se restaron ${monto_canje:,.0f} del saldo de {cliente_canje}.")
                         except Exception as e:
-                            st.error(f"⚠️ Error al guardar en Saldos_y_Canjes: Asegurate de haberle puesto los títulos en la fila 1 (Fecha, Cliente, Detalle, Monto a Favor). Error: {e}")
+                            st.error(f"⚠️ Error al guardar el ajuste: {e}")
                     else:
-                        st.warning("⚠️ Ingresá un monto mayor a $0 y detallá qué repuesto recibiste.")
-
+                        st.warning("⚠️ Ingresá un monto mayor a $0 y detallá de qué se trata.")
 
         # ==========================================
         # OPCIÓN 2: PAGO A PROVEEDORES (UNIFICADO VENTAS + GASTOS)
