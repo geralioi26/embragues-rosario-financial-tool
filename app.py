@@ -1580,19 +1580,37 @@ with col_t2:
     # El tope se puede modificar si ARCA/AFIP actualiza las escalas
     tope_cat_c = st.number_input("Tope Anual Categoría C ($):", min_value=1, value=24670494, step=100000)
 
-# Calculamos lo facturado desde la App
+# Calculamos lo facturado desde la App (Ventas + Entregas a Cuenta)
+facturado_app = 0
+frames_mariano = []
+
 try:
+    # 1. Leemos las ventas directas (Mostrador)
     df_ventas_afip = leer_fresca(SHEET_URL, "Ventas")
     if 'Facturado' in df_ventas_afip.columns:
-        # Filtramos solo los trabajos que tienen el "SI"
-        df_facturado = df_ventas_afip[df_ventas_afip['Facturado'].astype(str).str.strip().str.upper() == "SI"].copy()
-        facturado_app = pd.to_numeric(df_facturado['Venta $'], errors='coerce').fillna(0).sum()
-    else:
-        facturado_app = 0
-        df_facturado = pd.DataFrame()
-except:
-    facturado_app = 0
-    df_facturado = pd.DataFrame()
+        df_facturado_ventas = df_ventas_afip[df_ventas_afip['Facturado'].astype(str).str.strip().str.upper() == "SI"].copy()
+        if not df_facturado_ventas.empty:
+            facturado_app += pd.to_numeric(df_facturado_ventas['Venta $'], errors='coerce').fillna(0).sum()
+            # Preparamos tabla para Mariano
+            df_v = df_facturado_ventas[['Fecha', 'Cliente', 'Detalle', 'Venta $']].copy()
+            df_v.rename(columns={'Venta $': 'Monto Facturado ($)'}, inplace=True)
+            df_v['Origen'] = 'Venta Directa'
+            frames_mariano.append(df_v)
+            
+    # 2. Leemos las entregas a cuenta (Ej: Transferencias de Ariel)
+    df_saldos_afip = leer_fresca(SHEET_URL, "Saldos_y_Canjes")
+    if 'Facturado' in df_saldos_afip.columns:
+        df_facturado_saldos = df_saldos_afip[df_saldos_afip['Facturado'].astype(str).str.strip().str.upper() == "SI"].copy()
+        if not df_facturado_saldos.empty:
+            facturado_app += pd.to_numeric(df_facturado_saldos['Monto a Favor'], errors='coerce').fillna(0).sum()
+            # Preparamos tabla para Mariano
+            df_s = df_facturado_saldos[['Fecha', 'Cliente', 'Detalle', 'Monto a Favor']].copy()
+            df_s.rename(columns={'Monto a Favor': 'Monto Facturado ($)'}, inplace=True)
+            df_s['Origen'] = 'Entrega a Cuenta'
+            frames_mariano.append(df_s)
+            
+except Exception as e:
+    st.error(f"⚠️ Error calculando datos de AFIP: {e}")
 
 # Matemática del termómetro
 total_facturado = facturacion_previa + facturado_app
@@ -1615,9 +1633,10 @@ else:
 
 # --- 2. REPORTE PARA MARIANO ---
 st.markdown("#### 📄 Reporte para Mariano (Contador)")
-if not df_facturado.empty:
-    # Preparamos el archivo limpio solo con lo facturado
-    csv_mariano = df_facturado.to_csv(index=False).encode('utf-8')
+if frames_mariano:
+    # Unimos todo en un solo Excel limpio para el contador
+    df_reporte_final = pd.concat(frames_mariano, ignore_index=True)
+    csv_mariano = df_reporte_final.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="⬇️ Descargar Excel de Trabajos Facturados",
         data=csv_mariano,
@@ -1626,7 +1645,7 @@ if not df_facturado.empty:
         type="primary"
     )
 else:
-    st.info("No hay trabajos nuevos marcados como 'Con Factura' para exportar todavía.")
+    st.info("No hay trabajos ni ingresos marcados como 'Con Factura' para exportar todavía.")
 
 # --- 3. CHECKLIST PLANES DE PAGO AFIP ---
 st.markdown("#### 📅 Planes de Pago AFIP")
