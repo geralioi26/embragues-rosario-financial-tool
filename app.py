@@ -298,14 +298,14 @@ def descontar_stock(codigo, cantidad_a_restar):
 def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_bruto, monto_neto, costo, proveedor,
                       cod_kit, cod_crap, f_pago, e_cliente, e_prov, f_pago_prov,
                       m_forros, c_forros, costo_f, ganancia,
-                      desc_kit, desc_crap, desc_forros): 
+                      desc_kit, desc_crap, desc_forros, factura_texto): 
                       
-    fecha_hoy = (datetime.now() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
+    fecha_hoy = (pd.Timestamp.now() - pd.Timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
     
     columnas = ["Fecha", "Nro_Trabajo", "Categoría", "Cliente", "Vehículo", "Detalle",
                 "Venta $", "Compra $", "Proveedor", "Código", "Cod_Crapodina",
                 "Forma_de_pago", "Estado_Cobro", "Estado_Pago_Prov", "Forma_Pago_Prov",
-                "Marca_Forros", "Cod_Forros", "Costo_Forros", "Ganancia", "Monto Neto Esperado"]
+                "Marca_Forros", "Cod_Forros", "Costo_Forros", "Ganancia", "Monto Neto Esperado", "Facturado"]
                 
     try:
         df_existente = leer_fresca(SHEET_URL, "Ventas")
@@ -316,7 +316,7 @@ def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_
     nueva = pd.DataFrame([[fecha_hoy, nro_trabajo, categoria, cliente, vehiculo, detalle,
                            monto_bruto, costo, proveedor, cod_kit, cod_crap,
                            f_pago, e_cliente, e_prov, f_pago_prov,
-                           m_forros, c_forros, costo_f, ganancia, monto_neto]],
+                           m_forros, c_forros, costo_f, ganancia, monto_neto, factura_texto]],
                          columns=columnas)
                          
     df_nuevo = pd.concat([df_existente, nueva], ignore_index=True)
@@ -343,7 +343,6 @@ if "form_key" not in st.session_state:
     st.session_state.form_key = 0
 fk = st.session_state.form_key
 # -------------------------------------------------------------
-
 # 7. SIDEBAR — FORMULARIO
 st.sidebar.header("⚙️ Configuración")
 
