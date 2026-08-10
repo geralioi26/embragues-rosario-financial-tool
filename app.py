@@ -1553,3 +1553,90 @@ with st.expander(f"Abrir panel para cargar Códigos de {tipo_catalogo}"):
                     st.error(f"⚠️ Error al guardar el código: {e}")
             else:
                 st.warning("⚠️ Asegurate de escribir el Vehículo y el Nuevo Código.")
+
+
+# ==========================================
+# 13. MÓDULO AFIP Y MONOTRIBUTO
+# ==========================================
+st.markdown("---")
+st.markdown("### 🏛️ Control AFIP y Monotributo")
+
+# --- 1. TERMÓMETRO MONOTRIBUTO ---
+st.markdown("#### 🌡️ Termómetro Categoría C")
+st.info("Actualizá tu facturación previa y el tope de la categoría. El sistema sumará automáticamente los trabajos nuevos marcados 'Con Factura'.")
+
+col_t1, col_t2 = st.columns(2)
+with col_t1:
+    facturacion_previa = st.number_input("Facturación Previa 2026 ($):", min_value=0, value=0, step=100000, help="Ingresá lo que ya tenés facturado en el año hasta hoy.")
+with col_t2:
+    # El tope se puede modificar si ARCA/AFIP actualiza las escalas
+    tope_cat_c = st.number_input("Tope Anual Categoría C ($):", min_value=1, value=9765000, step=100000)
+
+# Calculamos lo facturado desde la App
+try:
+    df_ventas_afip = leer_fresca(SHEET_URL, "Ventas")
+    if 'Facturado' in df_ventas_afip.columns:
+        # Filtramos solo los trabajos que tienen el "SI"
+        df_facturado = df_ventas_afip[df_ventas_afip['Facturado'].astype(str).str.strip().str.upper() == "SI"].copy()
+        facturado_app = pd.to_numeric(df_facturado['Venta $'], errors='coerce').fillna(0).sum()
+    else:
+        facturado_app = 0
+        df_facturado = pd.DataFrame()
+except:
+    facturado_app = 0
+    df_facturado = pd.DataFrame()
+
+# Matemática del termómetro
+total_facturado = facturacion_previa + facturado_app
+porcentaje = (total_facturado / tope_cat_c) * 100 if tope_cat_c > 0 else 0
+
+col_m1, col_m2 = st.columns(2)
+with col_m1:
+    st.metric("Total Facturado Anual", f"${total_facturado:,.0f}", f"{porcentaje:.1f}% del tope")
+
+# Barra de progreso visual
+st.progress(min(porcentaje / 100, 1.0))
+
+# Alertas inteligentes de límite
+if porcentaje >= 90:
+    st.error("⚠️ ALERTA ROJA: Estás al límite de la Categoría C. Frena la facturación.")
+elif porcentaje >= 75:
+    st.warning("⚠️ Cuidado: Ya superaste el 75% del tope de la Categoría C.")
+else:
+    st.success("✅ Margen seguro para facturar.")
+
+# --- 2. REPORTE PARA MARIANO ---
+st.markdown("#### 📄 Reporte para Mariano (Contador)")
+if not df_facturado.empty:
+    # Preparamos el archivo limpio solo con lo facturado
+    csv_mariano = df_facturado.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="⬇️ Descargar Excel de Trabajos Facturados",
+        data=csv_mariano,
+        file_name="Facturacion_Embragues_Rosario.csv",
+        mime="text/csv",
+        type="primary"
+    )
+else:
+    st.info("No hay trabajos nuevos marcados como 'Con Factura' para exportar todavía.")
+
+# --- 3. CHECKLIST PLANES DE PAGO AFIP ---
+st.markdown("#### 📅 Planes de Pago AFIP")
+st.write("Control visual de cuotas debitadas.")
+
+col_p1, col_p2 = st.columns(2)
+
+with col_p1:
+    st.markdown("**Plan V664000 (17 Cuotas)**")
+    # Las primeras 5 ya están pagas, las bloqueamos.
+    for i in range(1, 18):
+        if i <= 5:
+            st.checkbox(f"Cuota {i} - Pagada", value=True, disabled=True, key=f"plan17_c{i}")
+        else:
+            st.checkbox(f"Cuota {i}", value=False, key=f"plan17_c{i}")
+
+with col_p2:
+    st.markdown("**Plan W391567 (5 Cuotas)**")
+    # Plan nuevo, todas disponibles para tildar.
+    for i in range(1, 6):
+        st.checkbox(f"Cuota {i}", value=False, key=f"plan5_c{i}")
