@@ -40,53 +40,12 @@ def leer_fresca(url, hoja):
     df = df.dropna(how='all')
     
     return df
-# 4. COEFICIENTES DESDE SHEETS (SEGURIDAD FINANCIERA ESTRICTA)
-try:
-    df_cfg = leer_hoja(SHEET_URL, "Configuracion")
-    
-    # BLINDAJE 1: Limpiamos espacios invisibles al principio o final de las palabras
-    df_cfg["Parametro"] = df_cfg["Parametro"].astype(str).str.strip()
-    cfg = dict(zip(df_cfg["Parametro"], df_cfg["Valor"]))
-    
-    # BLINDAJE 2: Convertimos a la fuerza cualquier coma en punto para que la matemática no falle
-    def a_numero(valor):
-        return float(str(valor).replace(",", ".").strip())
-    
-    # Exigimos la lectura directa y limpia
-    GETNET_1 = a_numero(cfg["GETNET_1_PAGO"])
-    GETNET_3 = a_numero(cfg["GETNET_3_CUOTAS"])
-    GETNET_6 = a_numero(cfg["GETNET_6_CUOTAS"])
-    
-    # Mantenemos Más Pagos operativo para futura comparación de tasas
-    MPAGOS_1 = a_numero(cfg["MASPAGOS_1_PAGO"])
-    MPAGOS_3 = a_numero(cfg["MASPAGOS_3_CUOTAS"])
-    MPAGOS_6 = a_numero(cfg["MASPAGOS_6_CUOTAS"])
-    
-    # NUEVO: LECTURA DEL DIVISOR PARA LINK DE PAGO GETNET
-    # Si por algún motivo se borra del Excel, usa 0.9758 por defecto como mecanismo de seguridad.
-    LINK_GETNET_DIVISOR = a_numero(cfg.get("LINK_GETNET_DIVISOR", 0.9758))
+# 4. COEFICIENTES FINANCIEROS (BLINDADOS EN CÓDIGO)
+# Fijamos las tasas de seguridad para +Pagos Nación y eliminamos Getnet por completo.
 
-except Exception as e:
-    st.error(f"🚨 ERROR TÉCNICO DETALLADO: {e}")
-    st.error("Verificá la tabla de abajo. Así es exactamente como la aplicación está leyendo tu Excel. Si falta algún dato, ahí está la fuga.")
-    try:
-        st.dataframe(df_cfg) # Le pedimos que nos muestre en pantalla qué fue lo que leyó
-    except:
-        pass
-    st.stop()
-
-
-# ==========================================
-# MÓDULO DE CÁLCULO: LINK DE PAGO (GETNET)
-# ==========================================
-def calcular_link_pago(precio_lista):
-    """
-    Calcula el monto base limpio para cargar en el Link de Pago Getnet.
-    Absorbe exactamente el 2% de arancel y el 21% de IVA sobre ese arancel.
-    Los intereses de las cuotas los aplica directamente la plataforma al cliente.
-    """
-    monto_base_link = precio_lista / LINK_GETNET_DIVISOR
-    return round(monto_base_link, 2)
+COEF_POSNET_BASE = 1.04  # +4% de escudo para cubrir el arancel a 10 días
+COEF_CLIENTE_3 = 1.12    # +12% de recargo final a mostrar al cliente
+COEF_CLIENTE_6 = 1.19    # +19% de recargo final a mostrar al cliente
 # 5. CATÁLOGOS
 try:
     df_kits = leer_hoja(SHEET_URL, "Catalogo_Kits")
@@ -505,12 +464,13 @@ estado_cliente = st.sidebar.selectbox("Estado del Cliente:", ["Pagado","Cuenta C
 f_pago_input = "N/A"
 if estado_cliente == "Pagado":
     f_pago_input = st.sidebar.selectbox("¿Cómo pagó?:", [
-        "Efectivo","Transferencia","Débito",
-        "BNA - 1 Pago","BNA - 3 Cuotas","BNA - 6 Cuotas",
-        "Link de Pago Getnet",
-        "Getnet - 1 Pago","Getnet - 3 Cuotas","Getnet - 6 Cuotas",
-        "Más Pagos - 1 Pago","Más Pagos - 3 Cuotas","Más Pagos - 6 Cuotas",
-        "Combinado","Otro"], key=f"fpago_{fk}")
+        "Efectivo",
+        "Transferencia",
+        "Débito",
+        "Más Pagos - Posnet/QR",
+        "Más Pagos - Link",
+        "Combinado",
+        "Otro"], key=f"fpago_{fk}")
 
 if tipo_item != "Rectificación de Volante":
     estado_p_prov = st.sidebar.selectbox("Estado al Proveedor:", ["Pagado","Cuenta Corriente","N/A"], index=0, key=f"estprov_{fk}")
@@ -527,14 +487,10 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     
     if f_pago_input in ["Efectivo", "Transferencia"]:
         monto_neto_guardar = "-"
-    elif "Link" in f_pago_input: 
-        monto_bruto = int(calcular_link_pago(monto_limpio))
-    elif f_pago_input == "Getnet - 1 Pago": monto_bruto = int(round(monto_limpio * GETNET_1))
-    elif f_pago_input == "Getnet - 3 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_3))
-    elif f_pago_input == "Getnet - 6 Cuotas": monto_bruto = int(round(monto_limpio * GETNET_6))
-    elif f_pago_input == "Más Pagos - 1 Pago": monto_bruto = int(round(monto_limpio * MPAGOS_1))
-    elif f_pago_input == "Más Pagos - 3 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_3))
-    elif f_pago_input == "Más Pagos - 6 Cuotas": monto_bruto = int(round(monto_limpio * MPAGOS_6))
+    elif "Más Pagos" in f_pago_input: 
+        # Inyectamos el escudo financiero del 4% directo al monto bruto
+        monto_bruto = int(round(monto_limpio * COEF_POSNET_BASE))
+        monto_neto_guardar = monto_limpio
     
     # Transformamos el tilde en un SI o NO para el Excel
     factura_texto = "SI" if con_factura else "NO"
@@ -560,40 +516,19 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     st.cache_data.clear()
     st.rerun()
 # 8. CALCULADORA DE CUOTAS
-st.markdown("### 💳 Calculadora de Cuotas / Links")
-tipo_pos = st.radio("¿Qué vas a usar?", ["GETNET (Posnet)", "MÁS PAGOS (Posnet)", "LINK DE PAGO (Getnet)"], horizontal=True)
+st.markdown("### 💳 Calculadora de Cuotas (+Pagos Nación)")
 
-if tipo_pos == "LINK DE PAGO (Getnet)":
-    nombre_pos = "LINK GETNET"
-    plan_link = st.selectbox("Plan de Cuotas para el Cliente:", ["Estándar Bancario", "Cuota Simple (MiPyME)"])
-    
-    # Matemática quirúrgica: Conectada a la función global (extrae el divisor directo del Excel)
-    monto_link = calcular_link_pago(monto_limpio)
-    
-    # Coeficientes según el plan que elija para el cliente
-    if "Estándar" in plan_link:
-        c3, c6 = 1.0913, 1.1666
-    else:
-        c3, c6 = 1.0810, 1.1638
-        
-    t1 = monto_link 
-    t3 = monto_link * c3
-    t6 = monto_link * c6
-    
-    st.info(f"🔗 **MONTO DEL LINK A GENERAR:** $ {monto_link:,.0f} (Copiá este valor exacto en la App de Getnet)")
+tipo_pos = st.radio("Herramienta de cobro:", ["POSNET / QR (En el local)", "LINK DE PAGO (A distancia)"], horizontal=True)
+nombre_pos = "+PAGOS"
 
-elif "GETNET" in tipo_pos:
-    c1, c3, c6 = GETNET_1, GETNET_3, GETNET_6
-    nombre_pos = "GETNET"
-    t1, t3, t6 = monto_limpio * c1, monto_limpio * c3, monto_limpio * c6
-    p_1, p_3, p_6 = [(x-1)*100 for x in [c1,c3,c6]]
-    st.info(f"📊 **Recargos:** 1 Pago: {p_1:.1f}% | 3 Cuotas: {p_3:.1f}% | 6 Cuotas: {p_6:.1f}%")
-else:
-    c1, c3, c6 = MPAGOS_1, MPAGOS_3, MPAGOS_6
-    nombre_pos = "MÁS PAGOS"
-    t1, t3, t6 = monto_limpio * c1, monto_limpio * c3, monto_limpio * c6
-    p_1, p_3, p_6 = [(x-1)*100 for x in [c1,c3,c6]]
-    st.info(f"📊 **Recargos:** 1 Pago: {p_1:.1f}% | 3 Cuotas: {p_3:.1f}% | 6 Cuotas: {p_6:.1f}%")
+# 1. Tu escudo protector (Lo que va a la máquina)
+t1 = monto_limpio * COEF_POSNET_BASE 
+
+# 2. La cara al cliente (Los recargos informativos)
+t3 = monto_limpio * COEF_CLIENTE_3
+t6 = monto_limpio * COEF_CLIENTE_6
+
+st.info(f"👉 **MONTO A TIPEAR EN LA MÁQUINA / LINK:** $ {t1:,.0f} (Incluye tu blindaje del 4%)")
 
 st.divider()
 st.markdown(f"""
@@ -602,16 +537,11 @@ st.markdown(f"""
   <p style='margin:0;font-size:0.9em;'>(Este monto te queda limpio)</p>
 </div>""", unsafe_allow_html=True)
 
-st.write(f"**Precios con {nombre_pos}:**")
+st.write("**Presupuesto para el cliente:**")
 ca, cb, cc = st.columns(3)
-if "LINK" in tipo_pos:
-    with ca: st.metric("LINK A GENERAR",   f"${t1:,.0f}")
-    with cb: st.metric("Cliente en 3 (Aprox)", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
-    with cc: st.metric("Cliente en 6 (Aprox)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
-else:
-    with ca: st.metric("1 PAGO",   f"${t1:,.0f}")
-    with cb: st.metric("3 CUOTAS", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
-    with cc: st.metric("6 CUOTAS", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
+with ca: st.metric("1 PAGO / QR",   f"${t1:,.0f}")
+with cb: st.metric("3 CUOTAS (12%)", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
+with cc: st.metric("6 CUOTAS (19%)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
 
 # 9. WHATSAPP
 txt_rectif = "\n✅ *Incluye rectificación y balanceo de volante*" if incl_rectif else ""
