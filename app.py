@@ -546,38 +546,39 @@ with cc: st.metric("6 CUOTAS (19%)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
 # 9. WHATSAPP (MULTI-COTIZADOR INTELIGENTE)
 st.divider()
 st.markdown("### 📱 Armador de Presupuestos (WhatsApp)")
-st.info("El sistema carga tu trabajo principal en la Opción 1. Podés agregar hasta 3 alternativas para comparar. Las opciones con precio $0 no se envían.")
 
-veh_presupuesto = st.text_input("Vehículo a presupuestar:", value=vehiculo_input, key="veh_pres")
+with st.expander("➕ Agregar opciones al presupuesto (Ej: Reparado, otras marcas)"):
+    st.info("La Opción 1 ya está cargada con los datos de tu barra lateral. Llená las siguientes solo si querés comparar precios.")
+    col_w1, col_w2 = st.columns(2)
+    with col_w1:
+        d2 = st.text_input("Opción 2 - Detalle (Ej: Reparado con IAR Metal):", key="d2")
+        p2 = st.number_input("Opción 2 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p2")
+        
+        d4 = st.text_input("Opción 4 - Detalle:", key="d4")
+        p4 = st.number_input("Opción 4 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p4")
 
-col_w1, col_w2 = st.columns(2)
-with col_w1:
-    # Opción 1 conectada a la barra lateral por defecto
-    d1 = st.text_input("Opción 1 - Detalle:", value=f"{detalle_final}{' (Con rectificación)' if incl_rectif else ''}", key="d1")
-    p1 = st.number_input("Opción 1 - Precio Contado ($):", min_value=0, value=int(monto_limpio), step=1000, key="p1")
-    
-    d3 = st.text_input("Opción 3 - Detalle:", value="", key="d3")
-    p3 = st.number_input("Opción 3 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p3")
+    with col_w2:
+        d3 = st.text_input("Opción 3 - Detalle:", key="d3")
+        p3 = st.number_input("Opción 3 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p3")
 
-with col_w2:
-    d2 = st.text_input("Opción 2 - Detalle (Ej: Reparado):", value="", key="d2")
-    p2 = st.number_input("Opción 2 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p2")
-    
-    d4 = st.text_input("Opción 4 - Detalle:", value="", key="d4")
-    p4 = st.number_input("Opción 4 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p4")
-
-# Botón para generar el mensaje sin recargar toda la página
-lineas_mensaje = [
-    f"🚗 *EMBRAGUES ROSARIO*",
-    f"¡Hola! Presupuesto para: *{veh_presupuesto}*\n"
+# Armamos la lista integrando la barra lateral como Opción 1
+opciones = [
+    (detalle_final, monto_limpio), # Toma los datos directos de la barra lateral
+    (d2, p2), 
+    (d3, p3), 
+    (d4, p4)
 ]
 
-opciones = [(d1, p1), (d2, p2), (d3, p3), (d4, p4)]
-contador = 1
+lineas_mensaje = [
+    f"🚗 *EMBRAGUES ROSARIO*",
+    f"¡Hola! Presupuesto para: *{vehiculo_input}*\n"
+]
 
+contador = 1
 for desc, precio in opciones:
     if precio > 0:
-        t3_op = precio * COEF_CLIENTE_3
+        # Usamos los coeficientes de recargo comercial que definimos para las cuotas
+        t3_op = precio * COEF_CLIENTE_3 
         t6_op = precio * COEF_CLIENTE_6
         detalle_op = desc if desc else f"Opción {contador}"
         
@@ -588,7 +589,7 @@ for desc, precio in opciones:
             f"💳 Tarjeta 6 cuotas: ${t6_op:,.0f} (${t6_op/6:,.2f} c/u)\n"
         )
         lineas_mensaje.append(bloque)
-        contador += 1
+    contador += 1
 
 lineas_mensaje.append("📍 *Dirección:* Crespo 4117, Rosario")
 lineas_mensaje.append("📍 *Ubicación:* https://www.google.com/maps?q=Crespo+4117+Rosario")
@@ -598,13 +599,12 @@ lineas_mensaje.append("¡Te esperamos pronto! 🙋🏻")
 
 mensaje_final = "\n".join(lineas_mensaje)
 
-# Mostramos el botón de envío y una vista previa
-if contador > 1:
+if monto_limpio > 0:
     st.link_button("🟢 ENVIAR PRESUPUESTO POR WHATSAPP", f"https://wa.me/?text={urllib.parse.quote(mensaje_final)}")
     with st.expander("Ver vista previa del mensaje"):
         st.code(mensaje_final, language="markdown")
 else:
-    st.warning("⚠️ Ingresá al menos un precio mayor a $0 para generar el presupuesto.")
+    st.warning("⚠️ Ingresá el Precio de VENTA en la barra lateral para generar el presupuesto.")
 # 10. HISTORIAL Y DASHBOARD FINANCIERO
 st.divider()
 
