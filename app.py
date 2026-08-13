@@ -543,42 +543,68 @@ with ca: st.metric("1 PAGO / QR",   f"${t1:,.0f}")
 with cb: st.metric("3 CUOTAS (12%)", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
 with cc: st.metric("6 CUOTAS (19%)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
 
-# 9. WHATSAPP
-txt_rectif = "\n✅ *Incluye rectificación y balanceo de volante*" if incl_rectif else ""
-maps_link = "https://www.google.com/maps?q=Crespo+4117+Rosario"
+# 9. WHATSAPP (MULTI-COTIZADOR INTELIGENTE)
+st.divider()
+st.markdown("### 📱 Armador de Presupuestos (WhatsApp)")
+st.info("El sistema carga tu trabajo principal en la Opción 1. Podés agregar hasta 3 alternativas para comparar. Las opciones con precio $0 no se envían.")
 
-# Texto condicional para no confundir al cliente con el Link vs Posnet
-if "LINK" in tipo_pos:
-    txt_tarjeta = (
-        f"💳 *LINK DE PAGO GETNET:*\n"
-        f"El monto exacto del link es de ${t1:,.0f}.\n"
-        f"*(Si elegís financiar con tu banco, estos son los valores aproximados:)*\n"
-        f"✅ *3 cuotas de:* ${t3/3:,.2f} (Total: ${t3:,.0f})\n"
-        f"✅ *6 cuotas de:* ${t6/6:,.2f} (Total: ${t6:,.0f})\n\n"
-    )
+veh_presupuesto = st.text_input("Vehículo a presupuestar:", value=vehiculo_input, key="veh_pres")
+
+col_w1, col_w2 = st.columns(2)
+with col_w1:
+    # Opción 1 conectada a la barra lateral por defecto
+    d1 = st.text_input("Opción 1 - Detalle:", value=f"{detalle_final}{' (Con rectificación)' if incl_rectif else ''}", key="d1")
+    p1 = st.number_input("Opción 1 - Precio Contado ($):", min_value=0, value=int(monto_limpio), step=1000, key="p1")
+    
+    d3 = st.text_input("Opción 3 - Detalle:", value="", key="d3")
+    p3 = st.number_input("Opción 3 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p3")
+
+with col_w2:
+    d2 = st.text_input("Opción 2 - Detalle (Ej: Reparado):", value="", key="d2")
+    p2 = st.number_input("Opción 2 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p2")
+    
+    d4 = st.text_input("Opción 4 - Detalle:", value="", key="d4")
+    p4 = st.number_input("Opción 4 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p4")
+
+# Botón para generar el mensaje sin recargar toda la página
+lineas_mensaje = [
+    f"🚗 *EMBRAGUES ROSARIO*",
+    f"¡Hola! Presupuesto para: *{veh_presupuesto}*\n"
+]
+
+opciones = [(d1, p1), (d2, p2), (d3, p3), (d4, p4)]
+contador = 1
+
+for desc, precio in opciones:
+    if precio > 0:
+        t3_op = precio * COEF_CLIENTE_3
+        t6_op = precio * COEF_CLIENTE_6
+        detalle_op = desc if desc else f"Opción {contador}"
+        
+        bloque = (
+            f"⚙️ *{detalle_op}*\n"
+            f"💰 Contado/Transf: ${precio:,.0f}\n"
+            f"💳 Tarjeta 3 cuotas: ${t3_op:,.0f} (${t3_op/3:,.2f} c/u)\n"
+            f"💳 Tarjeta 6 cuotas: ${t6_op:,.0f} (${t6_op/6:,.2f} c/u)\n"
+        )
+        lineas_mensaje.append(bloque)
+        contador += 1
+
+lineas_mensaje.append("📍 *Dirección:* Crespo 4117, Rosario")
+lineas_mensaje.append("📍 *Ubicación:* https://www.google.com/maps?q=Crespo+4117+Rosario")
+lineas_mensaje.append("📸 *Instagram:* @embraguesrosario")
+lineas_mensaje.append("⏰ *Horario:* 8:30 a 17:00 hs\n")
+lineas_mensaje.append("¡Te esperamos pronto! 🙋🏻")
+
+mensaje_final = "\n".join(lineas_mensaje)
+
+# Mostramos el botón de envío y una vista previa
+if contador > 1:
+    st.link_button("🟢 ENVIAR PRESUPUESTO POR WHATSAPP", f"https://wa.me/?text={urllib.parse.quote(mensaje_final)}")
+    with st.expander("Ver vista previa del mensaje"):
+        st.code(mensaje_final, language="markdown")
 else:
-    txt_tarjeta = (
-        f"💳 *TARJETA BANCARIA ({nombre_pos}):*\n"
-        f"✅ *1 pago:* ${t1:,.0f}\n\n"
-        f"✅ *3 cuotas de:* ${t3/3:,.2f}\n      (Total: ${t3:,.0f})\n\n"
-        f"✅ *6 cuotas de:* ${t6/6:,.2f}\n      (Total: ${t6:,.0f})\n\n"
-    )
-
-mensaje = (
-    f"🚗 *EMBRAGUES ROSARIO*\n"
-    f"¡Hola! Gracias por tu consulta. Te paso el presupuesto:\n\n"
-    f"🚗 *Vehículo:* {vehiculo_input}\n"
-    f"{icono} *Trabajo:* {detalle_final}{txt_rectif}\n\n"
-    f"💰 *EFECTIVO / TRANSF:* ${monto_limpio:,.0f}\n\n"
-    f"{txt_tarjeta}"
-    f"📍 *Dirección:* Crespo 4117, Rosario\n"
-    f"📍 *Ubicación:* {maps_link}\n"
-    f"📸 *Instagram:* @embraguesrosario\n"
-    f"⏰ *Horario:* 8:30 a 17:00 hs\n\n"
-    f"¡Te esperamos pronto! 🙋🏻"
-)
-st.link_button("🟢 ENVIAR PRESUPUESTO POR WHATSAPP", f"https://wa.me/?text={urllib.parse.quote(mensaje)}")
-
+    st.warning("⚠️ Ingresá al menos un precio mayor a $0 para generar el presupuesto.")
 # 10. HISTORIAL Y DASHBOARD FINANCIERO
 st.divider()
 
