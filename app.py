@@ -880,7 +880,23 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
 
             # BOTÓN INTELIGENTE (FIFO)
             st.markdown("#### 🤖 Liquidación Automática de Boletas")
-            cliente_fifo = st.selectbox("Seleccionar cliente para liquidar boletas con su Saldo a Favor:", lista_clientes, key="cliente_fifo")
+            st.info("Elegí el cliente y cómo te pagó para cancelar sus deudas atrasadas. Las boletas marcadas para ARCA sumarán al termómetro de AFIP.")
+            
+            col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
+            with col_f1:
+                cliente_fifo = st.selectbox("Cliente a liquidar:", lista_clientes, key="cliente_fifo")
+            with col_f2:
+                metodo_pago_fifo = st.selectbox("Forma de pago de la entrega:", ["Efectivo", "Transferencia", "Mixto", "Canje"])
+            with col_f3:
+                # Bloqueo inteligente: un Canje no suma plata física a ARCA
+                if metodo_pago_fifo == "Canje":
+                    st.write("") 
+                    st.write("🚫 Canje no suma a AFIP")
+                    marca_factura = "" 
+                else:
+                    st.write("") 
+                    facturar_arca = st.checkbox("🧾 Facturar para ARCA", help="Le pondrá 'SI' en la columna Facturado")
+                    marca_factura = "SI" if facturar_arca else ""
             
             if st.button(f"⚡ Liquidar Trabajos Viejos de {cliente_fifo} usando su Saldo", type="primary"):
                 try:
@@ -911,8 +927,12 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                             for idx, row in trabajos_pendientes.iterrows():
                                 costo_trabajo = row['Venta $']
                                 if costo_trabajo > 0 and saldo_disp >= costo_trabajo:
+                                    # LA CIRUGÍA ESTÉTICA: Limpiamos los textos que van al Excel
                                     df_v.at[idx, 'Estado_Cobro'] = 'Pagado'
-                                    df_v.at[idx, 'Forma_de_pago'] = 'Compensado con Saldo'
+                                    df_v.at[idx, 'Forma_de_pago'] = metodo_pago_fifo  # Inyecta: Efectivo, Transf, Mixto o Canje
+                                    if marca_factura == "SI":
+                                        df_v.at[idx, 'Facturado'] = "SI"  # Marca la boleta para el contador de Mariano
+                                    
                                     saldo_disp -= costo_trabajo
                                     saldo_usado += costo_trabajo
                                     boletas_pagadas += 1
@@ -925,15 +945,16 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                                 nueva_resta = pd.DataFrame([{
                                     "Fecha": pd.Timestamp.now().strftime("%d/%m/%Y"),
                                     "Cliente": cliente_fifo,
-                                    "Detalle": f"Liquidación automática de {boletas_pagadas} boleta(s)",
-                                    "Monto a Favor": -abs(saldo_usado)
+                                    "Detalle": f"Liquidación automática ({metodo_pago_fifo})",
+                                    "Monto a Favor": -abs(saldo_usado),
+                                    "Facturado": "NO" # La resta de saldo nunca es un hecho imponible
                                 }])
                                 df_s_actualizado = pd.concat([df_s, nueva_resta], ignore_index=True)
                                 conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_s_actualizado)
                                 
                                 leer_ventas.clear() # Francotirador
                                 leer_saldos.clear() # Francotirador
-                                st.success(f"🔥 ¡Éxito! El sistema liquidó automáticamente {boletas_pagadas} boleta(s) viejas usando ${saldo_usado:,.0f} del saldo a favor de {cliente_fifo}.")
+                                st.success(f"🔥 ¡Éxito! Se liquidaron {boletas_pagadas} boleta(s) viejas usando ${saldo_usado:,.0f} del saldo de {cliente_fifo}.")
                                 
                                 import time
                                 time.sleep(1.5)
