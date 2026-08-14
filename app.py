@@ -832,7 +832,9 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
             with st.form("form_canje", clear_on_submit=True):
                 col_c1, col_c2 = st.columns(2)
                 with col_c1:
-                    fecha_canje = st.date_input("Fecha del Movimiento", format="DD/MM/YYYY")
+                    # HORA ARGENTINA Y DÍA/MES/AÑO
+                    hoy_arg = pd.Timestamp.now(tz='America/Argentina/Buenos_Aires').date()
+                    fecha_canje = st.date_input("Fecha del Movimiento", value=hoy_arg, format="DD/MM/YYYY")
                     cliente_canje = st.selectbox("¿A qué cliente le ajustamos la cuenta?", lista_clientes)
                     tipo_movimiento = st.radio("Acción a realizar:", [
                         "Suma a Favor (Entregó Plata a cuenta o Mercadería)", 
@@ -854,7 +856,7 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                             df_saldos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
                             
                             nueva_fila = pd.DataFrame([{
-                                "Fecha": fecha_canje.strftime("%d/%m/%Y"),
+                                "Fecha": fecha_canje.strftime("%d/%m/%Y"), # FORZAMOS DÍA/MES/AÑO
                                 "Cliente": cliente_canje,
                                 "Detalle": detalle_canje,
                                 "Monto a Favor": monto_final,
@@ -929,9 +931,9 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                                 if costo_trabajo > 0 and saldo_disp >= costo_trabajo:
                                     # LA CIRUGÍA ESTÉTICA: Limpiamos los textos que van al Excel
                                     df_v.at[idx, 'Estado_Cobro'] = 'Pagado'
-                                    df_v.at[idx, 'Forma_de_pago'] = metodo_pago_fifo  # Inyecta: Efectivo, Transf, Mixto o Canje
+                                    df_v.at[idx, 'Forma_de_pago'] = metodo_pago_fifo
                                     if marca_factura == "SI":
-                                        df_v.at[idx, 'Facturado'] = "SI"  # Marca la boleta para el contador de Mariano
+                                        df_v.at[idx, 'Facturado'] = "SI"
                                     
                                     saldo_disp -= costo_trabajo
                                     saldo_usado += costo_trabajo
@@ -943,11 +945,11 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                                 conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_v)
                                 
                                 nueva_resta = pd.DataFrame([{
-                                    "Fecha": pd.Timestamp.now().strftime("%d/%m/%Y"),
+                                    "Fecha": pd.Timestamp.now(tz='America/Argentina/Buenos_Aires').strftime("%d/%m/%Y"), # HORA ARG Y DÍA/MES/AÑO
                                     "Cliente": cliente_fifo,
                                     "Detalle": f"Liquidación automática ({metodo_pago_fifo})",
                                     "Monto a Favor": -abs(saldo_usado),
-                                    "Facturado": "NO" # La resta de saldo nunca es un hecho imponible
+                                    "Facturado": "NO" 
                                 }])
                                 df_s_actualizado = pd.concat([df_s, nueva_resta], ignore_index=True)
                                 conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_s_actualizado)
