@@ -1429,17 +1429,42 @@ else:
 
 # --- 3. CHECKLIST PLANES DE PAGO AFIP ---
 st.markdown("#### 📅 Planes de Pago AFIP")
-st.write("Control visual de cuotas debitadas.")
+st.write("Control visual de cuotas debitadas, montos y vencimientos.")
 
 col_p1, col_p2 = st.columns(2)
 
 with col_p1:
     st.markdown("**Plan V664000 (17 Cuotas)**")
+    montos_v66 = [
+        50250.61, 50250.61, 50250.61, 50250.61, 50250.61, 
+        50250.61, 50250.61, 50250.61, 50250.61, 50250.61, 
+        50250.61, 50250.61, 50250.61, 50250.61, 50250.61, 
+        50250.61, 50250.61
+    ]
+    fechas_v66 = [
+        "16/03/2026", "16/04/2026", "16/05/2026", "16/06/2026", "16/07/2026",
+        "16/08/2026", "16/09/2026", "16/10/2026", "16/11/2026", "16/12/2026",
+        "16/01/2027", "16/02/2027", "16/03/2027", "16/04/2027", "16/05/2027",
+        "16/06/2027", "16/07/2027"
+    ]
     for i in range(1, 18):
-        if i <= 5: st.checkbox(f"Cuota {i} - Pagada", value=True, disabled=True, key=f"plan17_c{i}")
-        else: st.checkbox(f"Cuota {i}", value=False, key=f"plan17_c{i}")
+        monto_str = f"${montos_v66[i-1]:,.2f}"
+        fecha_str = fechas_v66[i-1]
+        if i <= 5: 
+            st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str}) - Pagada", value=True, disabled=True, key=f"plan17_c{i}")
+        elif i == 6:
+            st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str})", value=True, key=f"plan17_c{i}")
+        else: 
+            st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str})", value=False, key=f"plan17_c{i}")
 
 with col_p2:
     st.markdown("**Plan W391567 (5 Cuotas)**")
+    montos_w39 = [59162.71, 59162.72, 59162.72, 59162.72, 59162.72]
+    fechas_w39 = ["16/08/2026", "16/09/2026", "16/10/2026", "16/11/2026", "16/12/2026"]
     for i in range(1, 6):
-        st.checkbox(f"Cuota {i}", value=False, key=f"plan5_c{i}")
+        monto_str = f"${montos_w39[i-1]:,.2f}"
+        fecha_str = fechas_w39[i-1]
+        if i == 1:
+            st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str})", value=True, key=f"plan5_c{i}")
+        else:
+            st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str})", value=False, key=f"plan5_c{i}")
