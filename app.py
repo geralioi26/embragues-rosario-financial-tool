@@ -1337,7 +1337,7 @@ st.info("Actualizá tu facturación previa y el tope de la categoría. El sistem
 
 col_t1, col_t2 = st.columns(2)
 with col_t1:
-    facturacion_previa = st.number_input("Facturación Previa 2026 ($):", min_value=0, value=3599772, step=100000, help="Ingresá lo que ya tenés facturado en el año hasta hoy.")
+    facturacion_previa = st.number_input("Facturación Previa 2026 ($):", min_value=0, value=3349772, step=100000, help="Ingresá lo que ya tenés facturado en el año hasta hoy.")
 with col_t2:
     tope_cat_c = st.number_input("Tope Anual Categoría C ($):", min_value=1, value=24670494, step=100000)
 
