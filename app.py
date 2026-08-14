@@ -1450,10 +1450,8 @@ with col_p1:
     for i in range(1, 18):
         monto_str = f"${montos_v66[i-1]:,.2f}"
         fecha_str = fechas_v66[i-1]
-        if i <= 5: 
+        if i <= 6: 
             st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str}) - Pagada", value=True, disabled=True, key=f"plan17_c{i}")
-        elif i == 6:
-            st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str})", value=True, key=f"plan17_c{i}")
         else: 
             st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str})", value=False, key=f"plan17_c{i}")
 
@@ -1464,7 +1462,7 @@ with col_p2:
     for i in range(1, 6):
         monto_str = f"${montos_w39[i-1]:,.2f}"
         fecha_str = fechas_w39[i-1]
-        if i == 1:
-            st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str})", value=True, key=f"plan5_c{i}")
+        if i <= 1:
+            st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str}) - Pagada", value=True, disabled=True, key=f"plan5_c{i}")
         else:
             st.checkbox(f"Cuota {i} - {monto_str} (Vence: {fecha_str})", value=False, key=f"plan5_c{i}")
