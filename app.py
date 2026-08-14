@@ -1215,6 +1215,11 @@ with st.expander("📥 Abrir Panel UNIFICADO (Ingresa Stock y Gasto a la vez)"):
                     leer_gastos.clear() # Francotirador
                     st.success(f"✅ ¡Operación exitosa! Se sumaron {cantidad_compra}x {marca_final} al stock y se registró el gasto de ${monto_total:,.2f} en {proveedor_compra}.")
                     
+                    # --- ESTO ES LO QUE FALTABA PARA ACTUALIZAR LA PANTALLA ---
+                    import time
+                    time.sleep(1.5)
+                    st.rerun()
+                    
                 except Exception as e:
                     st.error(f"⚠️ Error en la operación unificada: {e}")
 
