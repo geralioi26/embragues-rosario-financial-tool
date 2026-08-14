@@ -843,7 +843,8 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 with col_c2:
                     monto_canje = st.number_input("Monto ($)", min_value=0, step=1000)
                     detalle_canje = st.text_input("Detalle (Ej: $55.000 a cuenta, Ajuste manual)")
-                    facturar_ingreso = st.checkbox("🧾 Declarar este ingreso (Suma a Categoría C)")
+                    facturar_ingreso = False
+                    st.caption("💡 Para ARCA: Los impuestos se declaran únicamente al liquidar la boleta en el panel de abajo.")
                 
                 submit_canje = st.form_submit_button("🔄 Registrar Movimiento en Cuenta")
                 
