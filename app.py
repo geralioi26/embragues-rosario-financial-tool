@@ -515,7 +515,7 @@ lineas_mensaje = [
 
 contador = 1
 for desc, precio in opciones:
-    if desc and desc.strip() != "": # Primero verifica que hayas escrito algo en el detalle
+    if desc and desc.strip() != "":
         if precio > 0:
             t3_op = precio * COEF_CLIENTE_3 
             t6_op = precio * COEF_CLIENTE_6
@@ -529,8 +529,7 @@ for desc, precio in opciones:
             )
             lineas_mensaje.append(bloque)
         else:
-            # Si escribiste texto pero dejaste el precio en 0, te avisa:
-            st.error(f"⚠️ ¡OJO! Escribiste detalle en la Opción {contador} pero te olvidaste de ponerle el precio. No se va a incluir en el mensaje.")
+            st.error(f"⚠️ ¡OJO! Escribiste detalle en la Opción {contador} pero el precio está en $0. No se incluyó.")
             
     contador += 1
 
@@ -543,10 +542,16 @@ lineas_mensaje.append("¡Te esperamos pronto! 👨🏻‍🔧")
 mensaje_final = "\n".join(lineas_mensaje)
 
 if monto_limpio > 0:
-    import urllib.parse
-    st.link_button("🟢 ENVIAR PRESUPUESTO POR WHATSAPP", f"https://wa.me/?text={urllib.parse.quote(mensaje_final)}")
-    with st.expander("Ver vista previa del mensaje"):
-        st.code(mensaje_final, language="markdown")
+    st.write("---")
+    st.info("👇 Presioná el botón gris para asegurar los datos antes de enviar al cliente.")
+    
+    # Sistema de 2 pasos para que el celular no se adelante
+    if st.button("⚙️ 1. PROCESAR Y ARMAR MENSAJE", type="primary", use_container_width=True):
+        import urllib.parse
+        st.success("✅ Datos sincronizados. Ya podés enviarlo por WhatsApp.")
+        st.link_button("🟢 2. ENVIAR PRESUPUESTO AHORA", f"https://wa.me/?text={urllib.parse.quote(mensaje_final)}", use_container_width=True)
+        with st.expander("Ver vista previa del mensaje", expanded=True):
+            st.code(mensaje_final, language="markdown")
 else:
     st.warning("⚠️ Ingresá el Precio de VENTA en la barra lateral para generar el presupuesto.")
 # 10. HISTORIAL Y DASHBOARD FINANCIERO
