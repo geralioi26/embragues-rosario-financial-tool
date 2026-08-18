@@ -287,7 +287,8 @@ tipo_item = st.sidebar.selectbox("Tipo de Trabajo:",
 if "Nuevo" in tipo_item:
     cat_f, icono, incl_rectif = "Venta", "⚙️", False
     m_kit = st.sidebar.selectbox("Marca del Kit:", ["LUK","SACHS","VALEO","PHC_VALEO","ORIGINAL","OTRA"], key=f"mkit_{fk}")
-    sugerencia = f"KIT nuevo marca *{m_kit}*"
+    # Aca le inyectamos a fuego tu frase de cabecera
+    sugerencia = f"KIT nuevo marca *{m_kit}* con rectificación y balanceo de volante incluido"
     
 elif "Reparación" in tipo_item:
     cat_f, icono, incl_rectif = "Reparación", "🔧", True
@@ -489,16 +490,20 @@ with cc: st.metric("6 CUOTAS (19%)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
 st.divider()
 st.markdown("### 📱 Armador de Presupuestos (WhatsApp)")
 
+# Definimos tu frase de cabecera para las reparaciones
+texto_rep_default = "Reparado completo placa disco con forros originales volante rectificado y balanceado"
+
 with st.expander("➕ Agregar opciones al presupuesto (Ej: Reparado, otras marcas)"):
     st.info("La Opción 1 ya está cargada con los datos de tu barra lateral. Llená las siguientes solo si querés comparar precios.")
     col_w1, col_w2 = st.columns(2)
     with col_w1:
-        d2 = st.text_input("Opción 2 - Detalle (Ej: Reparado con IAR Metal):", key="d2")
+        d2 = st.text_input("Opción 2 - Detalle (Ej: Kit embrague PHC Valeo):", key="d2")
         p2 = st.number_input("Opción 2 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p2")
         d4 = st.text_input("Opción 4 - Detalle:", key="d4")
         p4 = st.number_input("Opción 4 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p4")
     with col_w2:
-        d3 = st.text_input("Opción 3 - Detalle:", key="d3")
+        # Aca inyectamos el texto predeterminado en la caja 3
+        d3 = st.text_input("Opción 3 - Detalle (Reparado):", value=texto_rep_default, key="d3")
         p3 = st.number_input("Opción 3 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p3")
 
 opciones = [
@@ -515,21 +520,29 @@ lineas_mensaje = [
 
 contador = 1
 for desc, precio in opciones:
-    if desc and desc.strip() != "":
-        if precio > 0:
-            t3_op = precio * COEF_CLIENTE_3 
-            t6_op = precio * COEF_CLIENTE_6
-            detalle_op = desc
-            
-            bloque = (
-                f"⚙️ *{detalle_op}*\n"
-                f"💰 Contado/Transf: ${precio:,.0f}\n"
-                f"💳 Tarjeta 3 cuotas: ${t3_op:,.0f} (${t3_op/3:,.2f} c/u)\n"
-                f"💳 Tarjeta 6 cuotas: ${t6_op:,.0f} (${t6_op/6:,.2f} c/u)\n"
-            )
-            lineas_mensaje.append(bloque)
-        else:
-            st.error(f"⚠️ ¡OJO! Escribiste detalle en la Opción {contador} pero el precio está en $0. No se incluyó.")
+    tiene_desc = desc and desc.strip() != ""
+    tiene_precio = precio > 0
+    
+    if tiene_desc and tiene_precio:
+        t3_op = precio * COEF_CLIENTE_3 
+        t6_op = precio * COEF_CLIENTE_6
+        
+        bloque = (
+            f"⚙️ *{desc.strip()}*\n"
+            f"💰 Contado/Transf: ${precio:,.0f}\n"
+            f"💳 Tarjeta 3 cuotas: ${t3_op:,.0f} (${t3_op/3:,.2f} c/u)\n"
+            f"💳 Tarjeta 6 cuotas: ${t6_op:,.0f} (${t6_op/6:,.2f} c/u)\n"
+        )
+        lineas_mensaje.append(bloque)
+    elif tiene_desc and not tiene_precio:
+        # Excepción táctica: si es la frase por defecto y está en $0, la saltea en silencio
+        if desc.strip() == texto_rep_default.strip() and precio == 0:
+            pass
+        elif contador > 1:
+            st.error(f"⚠️ ¡OJO! Te olvidaste de ponerle el PRECIO a la Opción {contador}.")
+    elif not tiene_desc and tiene_precio:
+        if contador > 1:
+            st.error(f"⚠️ ¡OJO! Pusiste un precio de ${precio:,.0f} en la Opción {contador}, pero dejaste el DETALLE vacío.")
             
     contador += 1
 
@@ -545,7 +558,6 @@ if monto_limpio > 0:
     st.write("---")
     st.info("👇 Presioná el botón gris para asegurar los datos antes de enviar al cliente.")
     
-    # Sistema de 2 pasos para que el celular no se adelante
     if st.button("⚙️ 1. PROCESAR Y ARMAR MENSAJE", type="primary", use_container_width=True):
         import urllib.parse
         st.success("✅ Datos sincronizados. Ya podés enviarlo por WhatsApp.")
