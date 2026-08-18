@@ -515,35 +515,40 @@ lineas_mensaje = [
 
 contador = 1
 for desc, precio in opciones:
-    if precio > 0:
-        t3_op = precio * COEF_CLIENTE_3 
-        t6_op = precio * COEF_CLIENTE_6
-        detalle_op = desc if desc else f"Opción {contador}"
-        
-        bloque = (
-            f"⚙️ *{detalle_op}*\n"
-            f"💰 Contado/Transf: ${precio:,.0f}\n"
-            f"💳 Tarjeta 3 cuotas: ${t3_op:,.0f} (${t3_op/3:,.2f} c/u)\n"
-            f"💳 Tarjeta 6 cuotas: ${t6_op:,.0f} (${t6_op/6:,.2f} c/u)\n"
-        )
-        lineas_mensaje.append(bloque)
+    if desc and desc.strip() != "": # Primero verifica que hayas escrito algo en el detalle
+        if precio > 0:
+            t3_op = precio * COEF_CLIENTE_3 
+            t6_op = precio * COEF_CLIENTE_6
+            detalle_op = desc
+            
+            bloque = (
+                f"⚙️ *{detalle_op}*\n"
+                f"💰 Contado/Transf: ${precio:,.0f}\n"
+                f"💳 Tarjeta 3 cuotas: ${t3_op:,.0f} (${t3_op/3:,.2f} c/u)\n"
+                f"💳 Tarjeta 6 cuotas: ${t6_op:,.0f} (${t6_op/6:,.2f} c/u)\n"
+            )
+            lineas_mensaje.append(bloque)
+        else:
+            # Si escribiste texto pero dejaste el precio en 0, te avisa:
+            st.error(f"⚠️ ¡OJO! Escribiste detalle en la Opción {contador} pero te olvidaste de ponerle el precio. No se va a incluir en el mensaje.")
+            
     contador += 1
 
 lineas_mensaje.append("📍 *Dirección:* Crespo 4117, Rosario")
 lineas_mensaje.append("📍 *Ubicación:* https://www.google.com/maps?q=Crespo+4117+Rosario")
 lineas_mensaje.append("📸 *Instagram:* @embraguesrosario")
 lineas_mensaje.append("⏰ *Horario:* 8:30 a 17:00 hs\n")
-lineas_mensaje.append("¡Te esperamos pronto! 🙋🏻")
+lineas_mensaje.append("¡Te esperamos pronto! 👨🏻‍🔧")
 
 mensaje_final = "\n".join(lineas_mensaje)
 
 if monto_limpio > 0:
+    import urllib.parse
     st.link_button("🟢 ENVIAR PRESUPUESTO POR WHATSAPP", f"https://wa.me/?text={urllib.parse.quote(mensaje_final)}")
     with st.expander("Ver vista previa del mensaje"):
         st.code(mensaje_final, language="markdown")
 else:
     st.warning("⚠️ Ingresá el Precio de VENTA en la barra lateral para generar el presupuesto.")
-
 # 10. HISTORIAL Y DASHBOARD FINANCIERO
 st.divider()
 try:
