@@ -225,11 +225,13 @@ def descontar_stock(codigo, cantidad_a_restar):
 def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_bruto, monto_neto, costo, proveedor,
                       cod_kit, cod_crap, f_pago, e_cliente, e_prov, f_pago_prov,
                       m_forros, c_forros, costo_f, ganancia,
-                      desc_kit, desc_crap, desc_forros, factura_texto): 
+                      desc_kit, desc_crap, desc_forros, factura_texto, monto_final_afip): 
                       
     fecha_hoy = (pd.Timestamp.now() - pd.Timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
+    
+    # === ACÁ METIMOS LA COLUMNA NUEVA EXACTAMENTE COMO ESTÁ EN TU EXCEL ===
     columnas = ["Fecha", "Nro_Trabajo", "Categoría", "Cliente", "Vehículo", "Detalle",
-                "Venta $", "Compra $", "Proveedor", "Código", "Cod_Crapodina",
+                "Venta $", "Monto_Facturado_AFIP", "Compra $", "Proveedor", "Código", "Cod_Crapodina",
                 "Forma_de_pago", "Estado_Cobro", "Estado_Pago_Prov", "Forma_Pago_Prov",
                 "Marca_Forros", "Cod_Forros", "Costo_Forros", "Ganancia", "Monto Neto Esperado", "Facturado"]
                 
@@ -239,8 +241,9 @@ def guardar_en_google(nro_trabajo, categoria, cliente, vehiculo, detalle, monto_
         st.error(f"Error al leer Ventas: {e}")
         st.stop()
         
+    # === ACÁ ENCHUFAMOS EL DATO (después de monto_bruto y antes de costo) ===
     nueva = pd.DataFrame([[fecha_hoy, nro_trabajo, categoria, cliente, vehiculo, detalle,
-                           monto_bruto, costo, proveedor, cod_kit, cod_crap,
+                           monto_bruto, monto_final_afip, costo, proveedor, cod_kit, cod_crap,
                            f_pago, e_cliente, e_prov, f_pago_prov,
                            m_forros, c_forros, costo_f, ganancia, monto_neto, factura_texto]],
                          columns=columnas)
@@ -268,7 +271,6 @@ if "form_key" not in st.session_state:
     st.session_state.form_key = 0
 fk = st.session_state.form_key
 # -------------------------------------------------------------
-
 # 7. SIDEBAR — FORMULARIO
 st.sidebar.header("⚙️ Configuración")
 
@@ -362,6 +364,19 @@ monto_limpio = st.sidebar.number_input("Precio de VENTA ($):", min_value=0, valu
 
 con_factura = st.sidebar.checkbox("🧾 Con Factura (Suma a Categoría C)", value=False, key=f"factura_{fk}")
 
+# === NUEVO: CAJITA INTELIGENTE PARA AFIP ===
+monto_afip = 0
+if con_factura:
+    monto_afip = st.sidebar.number_input(
+        "Monto a Facturar en AFIP ($):", 
+        min_value=0, 
+        value=int(monto_limpio), 
+        step=1000,
+        key=f"monto_afip_{fk}",
+        help="Si el ticket tiene recargo de tarjeta, tipeá acá el monto inflado exacto. Si es efectivo o transf, dejalo igual."
+    )
+# ===========================================
+
 vehiculo_input = st.sidebar.text_input("Vehículo:", value="", key=f"vehiculo_{fk}")
 motor_input = st.sidebar.text_input("Motor:", value="", key=f"motor_{fk}")
 
@@ -444,13 +459,17 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     
     factura_texto = "SI" if con_factura else "NO"
     
+    # === NUEVO: DEFINIMOS QUÉ DATO VA A LA COLUMNA DE AFIP ===
+    monto_final_afip = monto_afip if con_factura else 0
+    
     guardar_en_google(nro_trabajo_input, cat_f, cliente_input, vehiculo_input, detalle_excel,
               monto_bruto, monto_neto_guardar, precio_compra, proveedor_input,
               cod_kit_final, cod_crap_final, f_pago_input,
               estado_cliente, estado_p_prov,
               "", 
               m_forros, forros_codigo, forros_costo, ganancia,
-              desc_kit, desc_crap, desc_forros, factura_texto)
+              desc_kit, desc_crap, desc_forros, factura_texto,
+              monto_final_afip) # <--- ACÁ ENCHUFAMOS EL DATO NUEVO AL FINAL
                       
     if cod_kit_final and cat_f == "Venta":
         marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
@@ -461,7 +480,6 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     st.session_state.form_key += 1
     st.session_state["venta_exitosa"] = "✅ Venta registrada correctamente."
     st.rerun()
-
 # 8. CALCULADORA DE CUOTAS
 st.markdown("### 💳 Calculadora de Cuotas (+Pagos Nación)")
 
@@ -1413,7 +1431,8 @@ try:
     if 'Facturado' in df_ventas_afip.columns:
         df_facturado_ventas = df_ventas_afip[df_ventas_afip['Facturado'].astype(str).str.strip().str.upper() == "SI"].copy()
         if not df_facturado_ventas.empty:
-            facturado_app += pd.to_numeric(df_facturado_ventas['Venta $'], errors='coerce').fillna(0).sum()
+            # ACÁ SE LEE LA COLUMNA NUEVA PARA EL TERMÓMETRO
+            facturado_app += pd.to_numeric(df_facturado_ventas['Monto_Facturado_AFIP'], errors='coerce').fillna(0).sum()
             
     df_saldos_afip = leer_saldos()
     if 'Facturado' in df_saldos_afip.columns:
@@ -1456,7 +1475,8 @@ if not df_facturado_ventas.empty or not df_facturado_saldos.empty or facturacion
                 'Fecha': row['Fecha'],
                 'Concepto': f"Venta - {row['Cliente']}",
                 'Detalle': row['Detalle'],
-                'Monto Facturado ($)': pd.to_numeric(row['Venta $'], errors='coerce')
+                # ACÁ SE LEE LA COLUMNA NUEVA PARA EL REPORTE DEL EXCEL
+                'Monto Facturado ($)': pd.to_numeric(row['Monto_Facturado_AFIP'], errors='coerce')
             })
 
     if not df_facturado_saldos.empty:
