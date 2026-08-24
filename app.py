@@ -33,7 +33,7 @@ def _leer_fresca_base(hoja):
     return df
 
 @st.cache_data(ttl=600, show_spinner=False)
-def leer_ventas(): return _leer_fresca_base("Ventas")
+def leer_ventas(): return _leer_fresca_base("Ventas")-
 
 @st.cache_data(ttl=600, show_spinner=False)
 def leer_stock(): return _leer_fresca_base("Inventario_Stock")
@@ -55,6 +55,7 @@ def leer_distribucion(): return _leer_fresca_base("Catalogo_Distribucion")
 
 # 4. COEFICIENTES FINANCIEROS (BLINDADOS EN CÓDIGO)
 COEF_POSNET_BASE = 1.04  # +4% de escudo para cubrir el arancel a 10 días
+COEF_CLIENTE_1 = 1.04  # +4% de recargo final a mostrar al cliente en 1 pago
 COEF_CLIENTE_3 = 1.12    # +12% de recargo final a mostrar al cliente
 COEF_CLIENTE_6 = 1.19    # +19% de recargo final a mostrar al cliente
 
