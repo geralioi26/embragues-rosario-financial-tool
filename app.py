@@ -33,7 +33,7 @@ def _leer_fresca_base(hoja):
     return df
 
 @st.cache_data(ttl=600, show_spinner=False)
-def leer_ventas(): return _leer_fresca_base("Ventas")-
+def leer_ventas(): return _leer_fresca_base("Ventas")
 
 @st.cache_data(ttl=600, show_spinner=False)
 def leer_stock(): return _leer_fresca_base("Inventario_Stock")
