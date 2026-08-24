@@ -542,12 +542,15 @@ for desc, precio in opciones:
     tiene_precio = precio > 0
     
     if tiene_desc and tiene_precio:
+        # ACA INYECTAMOS EL CÁLCULO DE LA CUOTA ÚNICA
+        t1_op = precio * COEF_CLIENTE_1
         t3_op = precio * COEF_CLIENTE_3 
         t6_op = precio * COEF_CLIENTE_6
         
         bloque = (
             f"⚙️ *{desc.strip()}*\n"
             f"💰 Contado/Transf: ${precio:,.0f}\n"
+            f"💳 Tarjeta 1 cuota: ${t1_op:,.0f}\n"
             f"💳 Tarjeta 3 cuotas: ${t3_op:,.0f} (${t3_op/3:,.2f} c/u)\n"
             f"💳 Tarjeta 6 cuotas: ${t6_op:,.0f} (${t6_op/6:,.2f} c/u)\n"
         )
