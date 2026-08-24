@@ -1119,7 +1119,6 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
 
     except Exception as e:
         st.error(f"⚠️ Error general al cargar las bases de datos: {e}")
-
         # OPCIÓN 2: PAGO A PROVEEDORES (UNIFICADO)
         elif tipo_saldo == "Pago a Proveedor":
             df_deudas_ventas = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
