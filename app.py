@@ -861,250 +861,264 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                         st.warning("⚠️ Seleccioná al menos una deuda para procesar.")
 
             # PANEL DE AJUSTES MANUALES Y FIFO
-            st.markdown("---")
-            st.markdown("### 🔄 Entregas a Cuenta y Ajustes Manuales")
-            st.info("Anotá entregas de plata a cuenta. Después usá el botón azul para que el sistema cancele boletas viejas automáticamente.")
+        st.markdown("---")
+        st.markdown("### 🔄 Entregas a Cuenta y Ajustes Manuales")
+        st.info("Anotá entregas de plata a cuenta. Después usá el botón azul para que el sistema cancele boletas viejas automáticamente.")
+        
+        lista_clientes = resumen_total['Cliente'].tolist() if 'resumen_total' in locals() and not resumen_total.empty else []
+        if "REPUESTOS ARIEL" not in lista_clientes:
+            lista_clientes.append("REPUESTOS ARIEL")
             
-            lista_clientes = resumen_total['Cliente'].tolist() if 'resumen_total' in locals() and not resumen_total.empty else []
-            if "REPUESTOS ARIEL" not in lista_clientes:
-                lista_clientes.append("REPUESTOS ARIEL")
+        with st.form("form_canje", clear_on_submit=True):
+            col_c1, col_c2 = st.columns(2)
+            with col_c1:
+                # HORA ARGENTINA Y DÍA/MES/AÑO
+                hoy_arg = pd.Timestamp.now(tz='America/Argentina/Buenos_Aires').date()
+                fecha_canje = st.date_input("Fecha del Movimiento", value=hoy_arg, format="DD/MM/YYYY")
+                cliente_canje = st.selectbox("¿A qué cliente le ajustamos la cuenta?", lista_clientes)
+                tipo_movimiento = st.radio("Acción a realizar:", [
+                    "Suma a Favor (Entregó Plata a cuenta o Mercadería)", 
+                    "Restar del Saldo (Ajuste o compensación manual)"
+                ])
+            with col_c2:
+                monto_canje = st.number_input("Monto Real Entregado ($)", min_value=0, step=1000)
+                detalle_canje = st.text_input("Detalle (Ej: $55.000 a cuenta, Ajuste manual)")
                 
-            with st.form("form_canje", clear_on_submit=True):
-                col_c1, col_c2 = st.columns(2)
-                with col_c1:
-                    # HORA ARGENTINA Y DÍA/MES/AÑO
-                    hoy_arg = pd.Timestamp.now(tz='America/Argentina/Buenos_Aires').date()
-                    fecha_canje = st.date_input("Fecha del Movimiento", value=hoy_arg, format="DD/MM/YYYY")
-                    cliente_canje = st.selectbox("¿A qué cliente le ajustamos la cuenta?", lista_clientes)
-                    tipo_movimiento = st.radio("Acción a realizar:", [
-                        "Suma a Favor (Entregó Plata a cuenta o Mercadería)", 
-                        "Restar del Saldo (Ajuste o compensación manual)"
-                    ])
-                with col_c2:
-                    monto_canje = st.number_input("Monto ($)", min_value=0, step=1000)
-                    detalle_canje = st.text_input("Detalle (Ej: $55.000 a cuenta, Ajuste manual)")
-                    facturar_ingreso = False
-                    st.caption("💡 Para ARCA: Los impuestos se declaran únicamente al liquidar la boleta en el panel de abajo.")
-                
-                submit_canje = st.form_submit_button("🔄 Registrar Movimiento en Cuenta")
-                
-                if submit_canje:
-                    if monto_canje > 0 and detalle_canje != "":
-                        try:
-                            monto_final = monto_canje if "Suma" in tipo_movimiento else -abs(monto_canje)
-                            es_facturado = "SI" if facturar_ingreso and "Suma" in tipo_movimiento else "NO"
-                            
-                            df_saldos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
-                            
-                            nueva_fila = pd.DataFrame([{
-                                "Fecha": fecha_canje.strftime("%d/%m/%Y"), # FORZAMOS DÍA/MES/AÑO
-                                "Cliente": cliente_canje,
-                                "Detalle": detalle_canje,
-                                "Monto a Favor": monto_final,
-                                "Facturado": es_facturado
-                            }])
-                            
-                            if df_saldos_actual.empty or len(df_saldos_actual.columns) == 0:
-                                df_actualizado = nueva_fila
-                            else:
-                                df_actualizado = pd.concat([df_saldos_actual, nueva_fila], ignore_index=True)
-                            
-                            conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_actualizado)
-                            leer_saldos.clear() # Francotirador
-                            
-                            if "Suma" in tipo_movimiento:
-                                st.success(f"✅ ¡Guardado! Se agregaron ${monto_canje:,.0f} a favor de {cliente_canje}.")
-                            else:
-                                st.success(f"✅ ¡Ajuste aplicado! Se restaron ${monto_canje:,.0f} del saldo de {cliente_canje}.")
-                        except Exception as e:
-                            st.error(f"⚠️ Error al guardar el ajuste: {e}")
-                    else:
-                        st.warning("⚠️ Ingresá un monto mayor a $0 y detallá de qué se trata.")
-
-            # BOTÓN INTELIGENTE (FIFO)
-            st.markdown("#### 🤖 Liquidación Automática de Boletas")
-            st.info("Elegí el cliente y cómo te pagó para cancelar sus deudas atrasadas. Las boletas marcadas para ARCA sumarán al termómetro de AFIP.")
+                # LA CASILLA NUEVA CON LA AUTOMATIZACIÓN
+                monto_afip = st.number_input("Monto a Facturar en AFIP ($)", min_value=0, step=1000, help="Si dejás 0, no va a ARCA. Si tipeás un número, el sistema le pone 'SI' automático.")
+                st.caption("💡 El termómetro de la Categoría C sumará solo lo que anotes en la casilla de AFIP.")
             
-            col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
-            with col_f1:
-                cliente_fifo = st.selectbox("Cliente a liquidar:", lista_clientes, key="cliente_fifo")
-            with col_f2:
-                metodo_pago_fifo = st.selectbox("Forma de pago de la entrega:", ["Efectivo", "Transferencia", "Mixto", "Canje"])
-            with col_f3:
-                # Bloqueo inteligente: un Canje no suma plata física a ARCA
-                if metodo_pago_fifo == "Canje":
-                    st.write("") 
-                    st.write("🚫 Canje no suma a AFIP")
-                    marca_factura = "" 
-                else:
-                    st.write("") 
-                    facturar_arca = st.checkbox("🧾 Facturar para ARCA", help="Le pondrá 'SI' en la columna Facturado")
-                    marca_factura = "SI" if facturar_arca else ""
+            submit_canje = st.form_submit_button("🔄 Registrar Movimiento en Cuenta")
             
-            if st.button(f"⚡ Liquidar Trabajos Viejos de {cliente_fifo} usando su Saldo", type="primary"):
-                try:
-                    df_v = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
-                    df_s = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
-                    
-                    saldo_disp = 0
-                    if not df_s.empty:
-                        mask_s = df_s['Cliente'].astype(str).str.strip().str.upper() == cliente_fifo.upper()
-                        saldo_disp = pd.to_numeric(df_s.loc[mask_s, 'Monto a Favor'], errors='coerce').sum()
+            if submit_canje:
+                if monto_canje > 0 and detalle_canje != "":
+                    try:
+                        monto_final = monto_canje if "Suma" in tipo_movimiento else -abs(monto_canje)
                         
-                    if saldo_disp <= 0:
-                        st.warning(f"⚠️ {cliente_fifo} no tiene Saldo a Favor disponible para compensar boletas.")
-                    else:
-                        mask_v = (df_v['Cliente'].astype(str).str.strip().str.upper() == cliente_fifo.upper()) & \
-                                 (df_v['Estado_Cobro'].astype(str).str.strip().str.lower() == "cuenta corriente")
-                        
-                        trabajos_pendientes = df_v[mask_v].copy()
-                        
-                        if trabajos_pendientes.empty:
-                            st.info(f"✅ {cliente_fifo} no tiene trabajos en Cuenta Corriente para pagar.")
+                        # CEREBRO AUTOMÁTICO: Define el SI/NO y protege las restas
+                        if "Suma" in tipo_movimiento and monto_afip > 0:
+                            es_facturado = "SI"
+                            facturado_afip_final = monto_afip
                         else:
-                            trabajos_pendientes['Venta $'] = pd.to_numeric(trabajos_pendientes['Venta $'], errors='coerce').fillna(0)
-                            
-                            saldo_usado = 0
-                            boletas_pagadas = 0
-                            
-                            for idx, row in trabajos_pendientes.iterrows():
-                                costo_trabajo = row['Venta $']
-                                if costo_trabajo > 0 and saldo_disp >= costo_trabajo:
-                                    # LA CIRUGÍA ESTÉTICA: Limpiamos los textos que van al Excel
-                                    df_v.at[idx, 'Estado_Cobro'] = 'Pagado'
-                                    df_v.at[idx, 'Forma_de_pago'] = metodo_pago_fifo
-                                    if marca_factura == "SI":
-                                        df_v.at[idx, 'Facturado'] = "SI"
-                                    
-                                    saldo_disp -= costo_trabajo
-                                    saldo_usado += costo_trabajo
-                                    boletas_pagadas += 1
-                                else:
-                                    break
-                                    
-                            if boletas_pagadas > 0:
-                                conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_v)
-                                
-                                nueva_resta = pd.DataFrame([{
-                                    "Fecha": pd.Timestamp.now(tz='America/Argentina/Buenos_Aires').strftime("%d/%m/%Y"), # HORA ARG Y DÍA/MES/AÑO
-                                    "Cliente": cliente_fifo,
-                                    "Detalle": f"Liquidación automática ({metodo_pago_fifo})",
-                                    "Monto a Favor": -abs(saldo_usado),
-                                    "Facturado": "NO" 
-                                }])
-                                df_s_actualizado = pd.concat([df_s, nueva_resta], ignore_index=True)
-                                conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_s_actualizado)
-                                
-                                leer_ventas.clear() # Francotirador
-                                leer_saldos.clear() # Francotirador
-                                st.success(f"🔥 ¡Éxito! Se liquidaron {boletas_pagadas} boleta(s) viejas usando ${saldo_usado:,.0f} del saldo de {cliente_fifo}.")
-                                
-                                import time
-                                time.sleep(1.5)
-                                st.rerun()
-                            else:
-                                st.warning(f"⚠️ El saldo a favor de {cliente_fifo} (${saldo_disp:,.0f}) no alcanza para cubrir la totalidad de su boleta más vieja.")
-                except Exception as e:
-                    st.error(f"⚠️ Fallo crítico en la automatización: {e}")
-
-        # OPCIÓN 2: PAGO A PROVEEDORES (UNIFICADO)
-        elif tipo_saldo == "Pago a Proveedor":
-            df_deudas_ventas = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
-            if not df_deudas_ventas.empty:
-                df_deudas_ventas['Origen'] = 'Ventas'
-                df_deudas_ventas['Monto_Deuda'] = pd.to_numeric(df_deudas_ventas['Compra $'], errors='coerce').fillna(0)
-                df_deudas_ventas['Vehículo'] = df_deudas_ventas['Vehículo'].astype(str)
-            else:
-                df_deudas_ventas = pd.DataFrame()
-
-            try:
-                df_gastos = leer_gastos()
-                df_deudas_gastos = df_gastos[df_gastos['Estado_Pago'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
-                if not df_deudas_gastos.empty:
-                    df_deudas_gastos['Origen'] = 'Gastos'
-                    df_deudas_gastos['Monto_Deuda'] = pd.to_numeric(df_deudas_gastos['Monto $'], errors='coerce').fillna(0)
-                    df_deudas_gastos['Vehículo'] = "N/A (Stock/Inversión)"
+                            es_facturado = "NO"
+                            facturado_afip_final = 0
+                        
+                        df_saldos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
+                        
+                        nueva_fila = pd.DataFrame([{
+                            "Fecha": fecha_canje.strftime("%d/%m/%Y"), # FORZAMOS DÍA/MES/AÑO
+                            "Cliente": cliente_canje,
+                            "Detalle": detalle_canje,
+                            "Monto a Favor": monto_final,
+                            "Facturado": es_facturado,
+                            "Monto_Facturado_AFIP": facturado_afip_final
+                        }])
+                        
+                        if df_saldos_actual.empty or len(df_saldos_actual.columns) == 0:
+                            df_actualizado = nueva_fila
+                        else:
+                            df_actualizado = pd.concat([df_saldos_actual, nueva_fila], ignore_index=True)
+                        
+                        conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_actualizado)
+                        leer_saldos.clear() # Francotirador
+                        
+                        if "Suma" in tipo_movimiento:
+                            st.success(f"✅ ¡Guardado! Se agregaron ${monto_canje:,.0f} a favor de {cliente_canje}.")
+                            if es_facturado == "SI":
+                                st.info(f"🧾 ARCA: Se sumaron ${facturado_afip_final:,.0f} al termómetro de Mariano.")
+                        else:
+                            st.success(f"✅ ¡Ajuste aplicado! Se restaron ${monto_canje:,.0f} del saldo de {cliente_canje}.")
+                    except Exception as e:
+                        st.error(f"⚠️ Error al guardar el ajuste: {e}")
                 else:
-                    df_deudas_gastos = pd.DataFrame()
-            except:
-                df_deudas_gastos = pd.DataFrame()
+                    st.warning("⚠️ Ingresá un monto mayor a $0 y detallá de qué se trata.")
 
-            if not df_deudas_ventas.empty or not df_deudas_gastos.empty:
-                df_deudas_prov = pd.concat([df_deudas_ventas, df_deudas_gastos], ignore_index=True)
+        # BOTÓN INTELIGENTE (FIFO)
+        st.markdown("#### 🤖 Liquidación Automática de Boletas")
+        st.info("Elegí el cliente y cómo te pagó para cancelar sus deudas atrasadas. Las boletas marcadas para ARCA sumarán al termómetro de AFIP.")
+        
+        col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
+        with col_f1:
+            cliente_fifo = st.selectbox("Cliente a liquidar:", lista_clientes, key="cliente_fifo")
+        with col_f2:
+            metodo_pago_fifo = st.selectbox("Forma de pago de la entrega:", ["Efectivo", "Transferencia", "Mixto", "Canje"])
+        with col_f3:
+            # Bloqueo inteligente: un Canje no suma plata física a ARCA
+            if metodo_pago_fifo == "Canje":
+                st.write("") 
+                st.write("🚫 Canje no suma a AFIP")
+                marca_factura = "" 
             else:
-                df_deudas_prov = pd.DataFrame()
-
-            if not df_deudas_prov.empty:
-                st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor en total? (Ventas + Gastos)**")
-                df_deudas_prov['Proveedor'] = df_deudas_prov['Proveedor'].astype(str).str.strip().str.upper()
-                resumen_totales_prov = df_deudas_prov.groupby('Proveedor')['Monto_Deuda'].sum().reset_index()
-                resumen_totales_prov.columns = ['Proveedor', 'Deuda Total ($)']
-                st.dataframe(resumen_totales_prov.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
+                st.write("") 
+                facturar_arca = st.checkbox("🧾 Facturar para ARCA", help="Le pondrá 'SI' en la columna Facturado")
+                marca_factura = "SI" if facturar_arca else ""
+        
+        if st.button(f"⚡ Liquidar Trabajos Viejos de {cliente_fifo} usando su Saldo", type="primary"):
+            try:
+                df_v = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
+                df_s = conn.read(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", ttl=0)
                 
-                st.write("📝 **Desglose exacto de las compras pendientes:**")
-                cols_mostrar = ['Origen', 'Fecha', 'Proveedor', 'Vehículo', 'Detalle', 'Monto_Deuda']
-                df_detalle_prov = df_deudas_prov[cols_mostrar].copy()
-                st.dataframe(df_detalle_prov.style.format({'Monto_Deuda': '${:,.0f}'}), hide_index=True, use_container_width=True)
-                
-                st.divider()
-                opciones_prov = df_deudas_prov['Fecha'].astype(str) + " | " + df_deudas_prov['Proveedor'].astype(str) + " | " + df_deudas_prov['Vehículo'].astype(str) + " | " + df_deudas_prov['Origen'].astype(str) + " | " + df_deudas_prov['Detalle'].astype(str)
-                seleccion_prov = st.multiselect("Seleccioná la o las deudas a pagar (podés elegir varias):", opciones_prov.tolist())
-                forma_pago_prov = st.selectbox("¿Cómo le pagaste al proveedor?", ["Efectivo", "Transferencia", "Otro"])
-                
-                if st.button("💸 Registrar Pago(s)"):
-                    if seleccion_prov:
-                        try:
-                            df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
-                            df_gastos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Gastos", ttl=0)
-                            
-                            if 'Estado_Pago_Prov' not in df_ventas_actual.columns: df_ventas_actual['Estado_Pago_Prov'] = ""
-                            if 'Forma_Pago_Prov' not in df_ventas_actual.columns: df_ventas_actual['Forma_Pago_Prov'] = ""
-                            if 'Forma_de_pago' not in df_gastos_actual.columns: df_gastos_actual['Forma_de_pago'] = ""
-                            
-                            hubo_cambios_ventas = False
-                            hubo_cambios_gastos = False
-
-                            for sel in seleccion_prov:
-                                partes = sel.split(" | ")
-                                fecha_sel = partes[0]
-                                prov_sel = partes[1]
-                                veh_sel = partes[2]
-                                origen_sel = partes[3]
-                                det_sel = partes[4]
-                                
-                                if origen_sel == 'Ventas':
-                                    mascara = (df_ventas_actual['Fecha'].astype(str) == fecha_sel) & \
-                                              (df_ventas_actual['Proveedor'].astype(str).str.strip().str.upper() == prov_sel) & \
-                                              (df_ventas_actual['Vehículo'].astype(str) == veh_sel)
-                                    df_ventas_actual.loc[mascara, 'Estado_Pago_Prov'] = 'Pagado'
-                                    df_ventas_actual.loc[mascara, 'Forma_Pago_Prov'] = forma_pago_prov
-                                    hubo_cambios_ventas = True
-                                elif origen_sel == 'Gastos':
-                                    mascara = (df_gastos_actual['Fecha'].astype(str) == fecha_sel) & \
-                                              (df_gastos_actual['Proveedor'].astype(str).str.strip().str.upper() == prov_sel) & \
-                                              (df_gastos_actual['Detalle'].astype(str) == det_sel)
-                                    df_gastos_actual.loc[mascara, 'Estado_Pago'] = 'Pagado (Contado/Transf)'
-                                    df_gastos_actual.loc[mascara, 'Forma_de_pago'] = forma_pago_prov
-                                    hubo_cambios_gastos = True
-                            
-                            if hubo_cambios_ventas:
-                                conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_ventas_actual)
-                                leer_ventas.clear() # Francotirador
-                            if hubo_cambios_gastos:
-                                conn.update(spreadsheet=SHEET_URL, worksheet="Gastos", data=df_gastos_actual)
-                                leer_gastos.clear() # Francotirador
-                                
-                            st.success(f"✅ {len(seleccion_prov)} pago(s) registrado(s) en {forma_pago_prov}. Excel actualizado.")
-                        except Exception as e:
-                            st.error(f"⚠️ Error al actualizar pagos: {e}")
+                saldo_disp = 0
+                if not df_s.empty:
+                    mask_s = df_s['Cliente'].astype(str).str.strip().str.upper() == cliente_fifo.upper()
+                    saldo_disp = pd.to_numeric(df_s.loc[mask_s, 'Monto a Favor'], errors='coerce').sum()
+                    
+                if saldo_disp <= 0:
+                    st.warning(f"⚠️ {cliente_fifo} no tiene Saldo a Favor disponible para compensar boletas.")
+                else:
+                    mask_v = (df_v['Cliente'].astype(str).str.strip().str.upper() == cliente_fifo.upper()) & \
+                             (df_v['Estado_Cobro'].astype(str).str.strip().str.lower() == "cuenta corriente")
+                    
+                    trabajos_pendientes = df_v[mask_v].copy()
+                    
+                    if trabajos_pendientes.empty:
+                        st.info(f"✅ {cliente_fifo} no tiene trabajos en Cuenta Corriente para pagar.")
                     else:
-                        st.warning("⚠️ Seleccioná al menos una deuda para pagar.")
-            else:
-                st.success("✅ No le debemos a ningún proveedor. ¡Cuentas al día!")
-                st.divider()
-    except Exception as e:
-        st.error(f"⚠️ Error al cargar las deudas: {e}")
+                        trabajos_pendientes['Venta $'] = pd.to_numeric(trabajos_pendientes['Venta $'], errors='coerce').fillna(0)
+                        
+                        saldo_usado = 0
+                        boletas_pagadas = 0
+                        
+                        for idx, row in trabajos_pendientes.iterrows():
+                            costo_trabajo = row['Venta $']
+                            if costo_trabajo > 0 and saldo_disp >= costo_trabajo:
+                                # LA CIRUGÍA ESTÉTICA: Limpiamos los textos que van al Excel
+                                df_v.at[idx, 'Estado_Cobro'] = 'Pagado'
+                                df_v.at[idx, 'Forma_de_pago'] = metodo_pago_fifo
+                                if marca_factura == "SI":
+                                    df_v.at[idx, 'Facturado'] = "SI"
+                                    # PARCHE QUIRÚRGICO: Asegura que sume en la columna AFIP al liquidar
+                                    df_v.at[idx, 'Monto_Facturado_AFIP'] = costo_trabajo
+                                
+                                saldo_disp -= costo_trabajo
+                                saldo_usado += costo_trabajo
+                                boletas_pagadas += 1
+                            else:
+                                break
+                                
+                        if boletas_pagadas > 0:
+                            conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_v)
+                            
+                            nueva_resta = pd.DataFrame([{
+                                "Fecha": pd.Timestamp.now(tz='America/Argentina/Buenos_Aires').strftime("%d/%m/%Y"), # HORA ARG Y DÍA/MES/AÑO
+                                "Cliente": cliente_fifo,
+                                "Detalle": f"Liquidación automática ({metodo_pago_fifo})",
+                                "Monto a Favor": -abs(saldo_usado),
+                                "Facturado": "NO",
+                                "Monto_Facturado_AFIP": 0
+                            }])
+                            df_s_actualizado = pd.concat([df_s, nueva_resta], ignore_index=True)
+                            conn.update(spreadsheet=SHEET_URL, worksheet="Saldos_y_Canjes", data=df_s_actualizado)
+                            
+                            leer_ventas.clear() # Francotirador
+                            leer_saldos.clear() # Francotirador
+                            st.success(f"🔥 ¡Éxito! Se liquidaron {boletas_pagadas} boleta(s) viejas usando ${saldo_usado:,.0f} del saldo de {cliente_fifo}.")
+                            
+                            import time
+                            time.sleep(1.5)
+                            st.rerun()
+                        else:
+                            st.warning(f"⚠️ El saldo a favor de {cliente_fifo} (${saldo_disp:,.0f}) no alcanza para cubrir la totalidad de su boleta más vieja.")
+            except Exception as e:
+                st.error(f"⚠️ Fallo crítico en la automatización: {e}")
 
+    # OPCIÓN 2: PAGO A PROVEEDORES (UNIFICADO)
+    elif tipo_saldo == "Pago a Proveedor":
+        df_deudas_ventas = df_ventas[df_ventas['Estado_Pago_Prov'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
+        if not df_deudas_ventas.empty:
+            df_deudas_ventas['Origen'] = 'Ventas'
+            df_deudas_ventas['Monto_Deuda'] = pd.to_numeric(df_deudas_ventas['Compra $'], errors='coerce').fillna(0)
+            df_deudas_ventas['Vehículo'] = df_deudas_ventas['Vehículo'].astype(str)
+        else:
+            df_deudas_ventas = pd.DataFrame()
+
+        try:
+            df_gastos = leer_gastos()
+            df_deudas_gastos = df_gastos[df_gastos['Estado_Pago'].astype(str).str.strip().str.lower() == "cuenta corriente"].copy()
+            if not df_deudas_gastos.empty:
+                df_deudas_gastos['Origen'] = 'Gastos'
+                df_deudas_gastos['Monto_Deuda'] = pd.to_numeric(df_deudas_gastos['Monto $'], errors='coerce').fillna(0)
+                df_deudas_gastos['Vehículo'] = "N/A (Stock/Inversión)"
+            else:
+                df_deudas_gastos = pd.DataFrame()
+        except:
+            df_deudas_gastos = pd.DataFrame()
+
+        if not df_deudas_ventas.empty or not df_deudas_gastos.empty:
+            df_deudas_prov = pd.concat([df_deudas_ventas, df_deudas_gastos], ignore_index=True)
+        else:
+            df_deudas_prov = pd.DataFrame()
+
+        if not df_deudas_prov.empty:
+            st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor en total? (Ventas + Gastos)**")
+            df_deudas_prov['Proveedor'] = df_deudas_prov['Proveedor'].astype(str).str.strip().str.upper()
+            resumen_totales_prov = df_deudas_prov.groupby('Proveedor')['Monto_Deuda'].sum().reset_index()
+            resumen_totales_prov.columns = ['Proveedor', 'Deuda Total ($)']
+            st.dataframe(resumen_totales_prov.style.format({'Deuda Total ($)': '${:,.0f}'}), hide_index=True)
+            
+            st.write("📝 **Desglose exacto de las compras pendientes:**")
+            cols_mostrar = ['Origen', 'Fecha', 'Proveedor', 'Vehículo', 'Detalle', 'Monto_Deuda']
+            df_detalle_prov = df_deudas_prov[cols_mostrar].copy()
+            st.dataframe(df_detalle_prov.style.format({'Monto_Deuda': '${:,.0f}'}), hide_index=True, use_container_width=True)
+            
+            st.divider()
+            opciones_prov = df_deudas_prov['Fecha'].astype(str) + " | " + df_deudas_prov['Proveedor'].astype(str) + " | " + df_deudas_prov['Vehículo'].astype(str) + " | " + df_deudas_prov['Origen'].astype(str) + " | " + df_deudas_prov['Detalle'].astype(str)
+            seleccion_prov = st.multiselect("Seleccioná la o las deudas a pagar (podés elegir varias):", opciones_prov.tolist())
+            forma_pago_prov = st.selectbox("¿Cómo le pagaste al proveedor?", ["Efectivo", "Transferencia", "Otro"])
+            
+            if st.button("💸 Registrar Pago(s)"):
+                if seleccion_prov:
+                    try:
+                        df_ventas_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Ventas", ttl=0)
+                        df_gastos_actual = conn.read(spreadsheet=SHEET_URL, worksheet="Gastos", ttl=0)
+                        
+                        if 'Estado_Pago_Prov' not in df_ventas_actual.columns: df_ventas_actual['Estado_Pago_Prov'] = ""
+                        if 'Forma_Pago_Prov' not in df_ventas_actual.columns: df_ventas_actual['Forma_Pago_Prov'] = ""
+                        if 'Forma_de_pago' not in df_gastos_actual.columns: df_gastos_actual['Forma_de_pago'] = ""
+                        
+                        hubo_cambios_ventas = False
+                        hubo_cambios_gastos = False
+
+                        for sel in seleccion_prov:
+                            partes = sel.split(" | ")
+                            fecha_sel = partes[0]
+                            prov_sel = partes[1]
+                            veh_sel = partes[2]
+                            origen_sel = partes[3]
+                            det_sel = partes[4]
+                            
+                            if origen_sel == 'Ventas':
+                                mascara = (df_ventas_actual['Fecha'].astype(str) == fecha_sel) & \
+                                          (df_ventas_actual['Proveedor'].astype(str).str.strip().str.upper() == prov_sel) & \
+                                          (df_ventas_actual['Vehículo'].astype(str) == veh_sel)
+                                df_ventas_actual.loc[mascara, 'Estado_Pago_Prov'] = 'Pagado'
+                                df_ventas_actual.loc[mascara, 'Forma_Pago_Prov'] = forma_pago_prov
+                                hubo_cambios_ventas = True
+                            elif origen_sel == 'Gastos':
+                                mascara = (df_gastos_actual['Fecha'].astype(str) == fecha_sel) & \
+                                          (df_gastos_actual['Proveedor'].astype(str).str.strip().str.upper() == prov_sel) & \
+                                          (df_gastos_actual['Detalle'].astype(str) == det_sel)
+                                df_gastos_actual.loc[mascara, 'Estado_Pago'] = 'Pagado (Contado/Transf)'
+                                df_gastos_actual.loc[mascara, 'Forma_de_pago'] = forma_pago_prov
+                                hubo_cambios_gastos = True
+                        
+                        if hubo_cambios_ventas:
+                            conn.update(spreadsheet=SHEET_URL, worksheet="Ventas", data=df_ventas_actual)
+                            leer_ventas.clear() # Francotirador
+                        if hubo_cambios_gastos:
+                            conn.update(spreadsheet=SHEET_URL, worksheet="Gastos", data=df_gastos_actual)
+                            leer_gastos.clear() # Francotirador
+                            
+                        st.success(f"✅ {len(seleccion_prov)} pago(s) registrado(s) en {forma_pago_prov}. Excel actualizado.")
+                    except Exception as e:
+                        st.error(f"⚠️ Error al actualizar pagos: {e}")
+                else:
+                    st.warning("⚠️ Seleccioná al menos una deuda para pagar.")
+        else:
+            st.success("✅ No le debemos a ningún proveedor. ¡Cuentas al día!")
+            st.divider()
+except Exception as e:
+    st.error(f"⚠️ Error al cargar las deudas: {e}")
 # 12. BUSCADOR GLOBAL INTELIGENTE
 st.divider()
 st.header("🔍 Consultar Catálogo y Stock")
