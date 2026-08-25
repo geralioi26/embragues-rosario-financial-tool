@@ -378,13 +378,36 @@ if con_factura:
     )
 # ===========================================
 
-vehiculo_input = st.sidebar.text_input("Vehículo:", value="", key=f"vehiculo_{fk}")
+# === NUEVO: BUSCADOR INTELIGENTE DE VEHÍCULOS ===
+vehiculos_existentes = []
+try:
+    if 'df_kits' in locals() and not df_kits.empty:
+        vehiculos_existentes.extend(df_kits['Vehiculo'].dropna().unique().tolist())
+    if 'df_crapo' in locals() and not df_crapo.empty:
+        vehiculos_existentes.extend(df_crapo['Vehiculo'].dropna().unique().tolist())
+    # Limpiamos duplicados, vacíos y ordenamos alfabéticamente
+    vehiculos_existentes = sorted(list(set([str(v).strip() for v in vehiculos_existentes if str(v).strip() != "" and str(v).strip().lower() != "nan"])))
+except:
+    pass
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("🚗 **Datos del Vehículo**")
+
+nuevo_vehiculo = st.sidebar.checkbox("➕ Cargar un vehículo nuevo (que no está en la base)", value=False, key=f"nuevo_veh_{fk}")
+
+if nuevo_vehiculo or not vehiculos_existentes:
+    vehiculo_input = st.sidebar.text_input("Nombre del Vehículo (NUEVO):", value="", key=f"vehiculo_{fk}")
+else:
+    vehiculo_input = st.sidebar.selectbox("Seleccionar Vehículo (Tipeá para buscar):", [""] + vehiculos_existentes, key=f"vehiculo_{fk}")
+
 motor_input = st.sidebar.text_input("Motor:", value="", key=f"motor_{fk}")
+st.sidebar.markdown("---")
 
 if tipo_item != "Rectificación de Volante":
     proveedor_input = st.sidebar.text_input("Proveedor:", value="", key=f"proveedor_{fk}")
 else:
     proveedor_input = "Taller Propio"
+# ===============================================
 
 if tipo_item == "Rectificación de Volante":
     detalle_excel = st.sidebar.text_input("📝 Detalle para Excel:", value="Rectificación volante", key=f"detalle_{fk}")
@@ -470,7 +493,7 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
               "", 
               m_forros, forros_codigo, forros_costo, ganancia,
               desc_kit, desc_crap, desc_forros, factura_texto,
-              monto_final_afip) # <--- ACÁ ENCHUFAMOS EL DATO NUEVO AL FINAL
+              monto_final_afip)
                       
     if cod_kit_final and cat_f == "Venta":
         marca_k = m_kit[0] if isinstance(m_kit, list) and m_kit else (m_kit or "OTRA")
@@ -481,6 +504,12 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     st.session_state.form_key += 1
     st.session_state["venta_exitosa"] = "✅ Venta registrada correctamente."
     st.rerun()
+
+# -------------------------------------------------------------
+if "form_key" not in st.session_state:
+    st.session_state.form_key = 0
+fk = st.session_state.form_key
+# -------------------------------------------------------------
 # 8. CALCULADORA DE CUOTAS
 st.markdown("### 💳 Calculadora de Cuotas (+Pagos Nación)")
 
