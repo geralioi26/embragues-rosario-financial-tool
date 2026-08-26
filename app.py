@@ -1081,6 +1081,21 @@ if st.checkbox("Abrir panel de Cuentas Corrientes"):
                 df_deudas_prov = pd.DataFrame()
 
             if not df_deudas_prov.empty:
+                # ---------------------------------------------------------
+                # CIRUGÍA: ORDENAMIENTO CRONOLÓGICO ESTRICTO
+                # ---------------------------------------------------------
+                # 1. Convertimos la columna 'Fecha' (que es texto) a un formato de tiempo real (datetime)
+                df_deudas_prov['Fecha_Orden'] = pd.to_datetime(df_deudas_prov['Fecha'], format="%d/%m/%Y %H:%M", errors='coerce').fillna(
+                    pd.to_datetime(df_deudas_prov['Fecha'], format="%d/%m/%Y", errors='coerce')
+                )
+                
+                # 2. Ordenamos toda la tabla usando esa nueva columna temporal
+                df_deudas_prov = df_deudas_prov.sort_values(by='Fecha_Orden', ascending=True)
+                
+                # 3. Borramos la columna temporal auxiliar para que no se muestre en pantalla
+                df_deudas_prov = df_deudas_prov.drop(columns=['Fecha_Orden'])
+                # ---------------------------------------------------------
+
                 st.write("📊 **Resumen: ¿Cuánto le debemos a cada proveedor en total? (Ventas + Gastos)**")
                 df_deudas_prov['Proveedor'] = df_deudas_prov['Proveedor'].astype(str).str.strip().str.upper()
                 resumen_totales_prov = df_deudas_prov.groupby('Proveedor')['Monto_Deuda'].sum().reset_index()
