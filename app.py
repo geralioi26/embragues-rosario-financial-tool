@@ -1500,7 +1500,13 @@ try:
     if 'Facturado' in df_saldos_afip.columns:
         df_facturado_saldos = df_saldos_afip[df_saldos_afip['Facturado'].astype(str).str.strip().str.upper() == "SI"].copy()
         if not df_facturado_saldos.empty:
-            facturado_app += pd.to_numeric(df_facturado_saldos['Monto a Favor'], errors='coerce').fillna(0).sum()
+            # ACÁ REPARAMOS EL ERROR PARA QUE LEA TUS 200.000 O CUALQUIER MONTO MANUAL
+            if 'Monto_Facturado_AFIP' in df_facturado_saldos.columns:
+                montos_afip = pd.to_numeric(df_facturado_saldos['Monto_Facturado_AFIP'], errors='coerce').fillna(0)
+                montos_favor = pd.to_numeric(df_facturado_saldos['Monto a Favor'], errors='coerce').fillna(0)
+                facturado_app += montos_afip.where(montos_afip > 0, montos_favor).sum()
+            else:
+                facturado_app += pd.to_numeric(df_facturado_saldos['Monto a Favor'], errors='coerce').fillna(0).sum()
             
 except Exception as e:
     st.error(f"⚠️ Error calculando datos de AFIP: {e}")
@@ -1543,11 +1549,16 @@ if not df_facturado_ventas.empty or not df_facturado_saldos.empty or facturacion
 
     if not df_facturado_saldos.empty:
         for _, row in df_facturado_saldos.iterrows():
+            # ACÁ REPARAMOS EL EXCEL DE MARIANO PARA QUE IMPACTEN LOS 200.000
+            monto_reporte = row.get('Monto_Facturado_AFIP', 0)
+            if pd.isna(monto_reporte) or float(monto_reporte) == 0:
+                monto_reporte = row['Monto a Favor']
+                
             reporte_data.append({
                 'Fecha': row['Fecha'],
                 'Concepto': f"Ingreso a Cuenta - {row['Cliente']}",
                 'Detalle': row['Detalle'],
-                'Monto Facturado ($)': pd.to_numeric(row['Monto a Favor'], errors='coerce')
+                'Monto Facturado ($)': pd.to_numeric(monto_reporte, errors='coerce')
             })
 
     df_reporte_final = pd.DataFrame(reporte_data)
