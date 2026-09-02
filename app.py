@@ -519,17 +519,22 @@ if "form_key" not in st.session_state:
     st.session_state.form_key = 0
 fk = st.session_state.form_key
 # -------------------------------------------------------------
+# -------------------------------------------------------------
 # 8. CALCULADORA DE CUOTAS
 st.markdown("### 💳 Calculadora de Cuotas (+Pagos Nación)")
 
 tipo_pos = st.radio("Herramienta de cobro:", ["POSNET / QR (En el local)", "LINK DE PAGO (A distancia)"], horizontal=True)
 nombre_pos = "+PAGOS"
 
-# --- NUEVA LÓGICA MATEMÁTICA ---
+# --- LÓGICA MATEMÁTICA BLINDADA ---
 t1 = monto_limpio / (1 - RETENCION_POSNET)
 t3 = t1 * INTERES_POSNET_3
 t6 = t1 * INTERES_POSNET_6
-# -------------------------------
+
+# --- CÁLCULO DEL PORCENTAJE REAL TOTAL (SOLO PARA TU PANTALLA) ---
+pct_3 = ((t3 / monto_limpio) - 1) * 100 if monto_limpio > 0 else 0
+pct_6 = ((t6 / monto_limpio) - 1) * 100 if monto_limpio > 0 else 0
+# -----------------------------------------------------------------
 
 st.info(f"👉 **MONTO A TIPEAR EN LA MÁQUINA / LINK:** $ {t1:,.0f} (Monto base para absorber retención)")
 st.divider()
@@ -542,9 +547,8 @@ st.markdown(f"""
 st.write("**Presupuesto para el cliente:**")
 ca, cb, cc = st.columns(3)
 with ca: st.metric("1 PAGO / QR",   f"${t1:,.0f}")
-# Le volé los porcentajes mentirosos de los títulos para que no te mareen más
-with cb: st.metric("3 CUOTAS (+6.42%)", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
-with cc: st.metric("6 CUOTAS (+12.93%)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
+with cb: st.metric(f"3 CUOTAS (+{pct_3:.1f}%)", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
+with cc: st.metric(f"6 CUOTAS (+{pct_6:.1f}%)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
 
 # 9. WHATSAPP (MULTI-COTIZADOR INTELIGENTE)
 st.divider()
