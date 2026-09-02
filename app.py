@@ -53,11 +53,18 @@ def leer_crapodinas(): return _leer_fresca_base("Catalogo_Crapodinas")
 @st.cache_data(ttl=600, show_spinner=False)
 def leer_distribucion(): return _leer_fresca_base("Catalogo_Distribucion")
 
+# ==========================================
 # 4. COEFICIENTES FINANCIEROS (BLINDADOS EN CÓDIGO)
-COEF_POSNET_BASE = 1.04  # +4% de escudo para cubrir el arancel a 10 días
-COEF_CLIENTE_1 = 1.04  # +4% de recargo final a mostrar al cliente en 1 pago
-COEF_CLIENTE_3 = 1.12    # +12% de recargo final a mostrar al cliente
-COEF_CLIENTE_6 = 1.19    # +19% de recargo final a mostrar al cliente
+# ==========================================
+# Definimos los porcentajes reales de retención total de la plataforma (+Pagos / BNA)
+# NOTA: Estos valores se pueden ajustar según el simulador del posnet.
+RETENCION_POSNET_1 = 0.0653  # 6.53% de retención total en 1 pago (validado con resumen BNA)
+RETENCION_POSNET_3 = 0.12    # 12% estimado para 3 cuotas (ajustable con simulador)
+RETENCION_POSNET_6 = 0.19    # 19% estimado para 6 cuotas (ajustable con simulador)
+
+# Fórmulas algebraicas blindadas: Precio Neto / (1 - % de retención)
+# Esto asegura que el recargo absorba la comisión y el IVA sobre el bruto, 
+# garantizando que te entren los pesos exactos a tu favor.
 
 # 5. CATÁLOGOS (Lectura Inicial)
 try:
