@@ -485,7 +485,7 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     if f_pago_input in ["Efectivo", "Transferencia"]:
         monto_neto_guardar = "-"
     elif "Más Pagos" in f_pago_input: 
-        monto_bruto = int(round(monto_limpio * COEF_POSNET_BASE))
+        monto_bruto = int(round(monto_limpio / (1 - RETENCION_POSNET_1)))
         monto_neto_guardar = monto_limpio
     
     factura_texto = "SI" if con_factura else "NO"
@@ -523,11 +523,11 @@ st.markdown("### 💳 Calculadora de Cuotas (+Pagos Nación)")
 tipo_pos = st.radio("Herramienta de cobro:", ["POSNET / QR (En el local)", "LINK DE PAGO (A distancia)"], horizontal=True)
 nombre_pos = "+PAGOS"
 
-t1 = monto_limpio * COEF_POSNET_BASE 
-t3 = monto_limpio * COEF_CLIENTE_3
-t6 = monto_limpio * COEF_CLIENTE_6
+t1 = monto_limpio / (1 - RETENCION_POSNET_1)
+t3 = monto_limpio / (1 - RETENCION_POSNET_3)
+t6 = monto_limpio / (1 - RETENCION_POSNET_6)
 
-st.info(f"👉 **MONTO A TIPEAR EN LA MÁQUINA / LINK:** $ {t1:,.0f} (Incluye tu blindaje del 4%)")
+st.info(f"👉 **MONTO A TIPEAR EN LA MÁQUINA / LINK:** $ {t1:,.0f} (Monto bruto exacto con retención de +Pagos)")
 st.divider()
 st.markdown(f"""
 <div style='background:#d4edda;padding:10px;border-radius:5px;text-align:center;border:2px solid #28a745;'>
@@ -579,10 +579,10 @@ for desc, precio in opciones:
     tiene_precio = precio > 0
     
     if tiene_desc and tiene_precio:
-        # ACA INYECTAMOS EL CÁLCULO DE LA CUOTA ÚNICA
-        t1_op = precio * COEF_CLIENTE_1
-        t3_op = precio * COEF_CLIENTE_3 
-        t6_op = precio * COEF_CLIENTE_6
+        # ACA INYECTAMOS EL CÁLCULO BLINDADO DE CUOTAS
+        t1_op = precio / (1 - RETENCION_POSNET_1)
+        t3_op = precio / (1 - RETENCION_POSNET_3)
+        t6_op = precio / (1 - RETENCION_POSNET_6)
         
         bloque = (
             f"⚙️ *{desc.strip()}*\n"
