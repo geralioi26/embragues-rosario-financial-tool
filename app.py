@@ -536,8 +536,9 @@ pct_3 = ((t3 / monto_limpio) - 1) * 100 if monto_limpio > 0 else 0
 pct_6 = ((t6 / monto_limpio) - 1) * 100 if monto_limpio > 0 else 0
 # -----------------------------------------------------------------
 
-st.info(f"👉 **MONTO A TIPEAR EN LA MÁQUINA / LINK:** $ {t1:,.0f} (Monto base para absorber retención)")
+st.info(f"👉 **MONTO A TIPEAR EN EL POSNET:** $ {t1:,.0f} (Monto base)")
 st.divider()
+
 st.markdown(f"""
 <div style='background:#d4edda;padding:10px;border-radius:5px;text-align:center;border:2px solid #28a745;'>
   <h2 style='color:#155724;margin:0;'>💰 CONTADO / TRANSF: ${monto_limpio:,.0f}</h2>
