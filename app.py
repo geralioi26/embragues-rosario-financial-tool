@@ -56,15 +56,17 @@ def leer_distribucion(): return _leer_fresca_base("Catalogo_Distribucion")
 # ==========================================
 # 4. COEFICIENTES FINANCIEROS (BLINDADOS EN CÓDIGO)
 # ==========================================
-# Definimos los porcentajes reales de retención total de la plataforma (+Pagos / BNA)
-# NOTA: Estos valores se pueden ajustar según el simulador del posnet.
-RETENCION_POSNET_1 = 0.0653  # 6.53% de retención total en 1 pago (validado con resumen BNA)
-RETENCION_POSNET_3 = 0.12    # 12% estimado para 3 cuotas (ajustable con simulador)
-RETENCION_POSNET_6 = 0.19    # 19% estimado para 6 cuotas (ajustable con simulador)
+# Retención plana del banco sobre el monto base que tipeás en el posnet
+RETENCION_POSNET = 0.0653  # 6.53% real comprobado con extracto BNA
 
-# Fórmulas algebraicas blindadas: Precio Neto / (1 - % de retención)
-# Esto asegura que el recargo absorba la comisión y el IVA sobre el bruto, 
-# garantizando que te entren los pesos exactos a tu favor.
+# Recargos automáticos que hace la máquina de +Pagos al cliente:
+INTERES_POSNET_3 = 1.0642  # El posnet suma automáticamente +6.42% en 3 cuotas
+INTERES_POSNET_6 = 1.1293  # El posnet suma automáticamente +12.93% en 6 cuotas
+
+# Lógica operativa de la App:
+# 1. El cálculo base absorbe el 6.53% para que te entren los pesos exactos.
+# 2. Las opciones de 3 y 6 cuotas para WhatsApp multiplican ese monto base 
+#    por los intereses de la máquina, para que el cliente lea el número final.
 
 # 5. CATÁLOGOS (Lectura Inicial)
 try:
@@ -523,11 +525,13 @@ st.markdown("### 💳 Calculadora de Cuotas (+Pagos Nación)")
 tipo_pos = st.radio("Herramienta de cobro:", ["POSNET / QR (En el local)", "LINK DE PAGO (A distancia)"], horizontal=True)
 nombre_pos = "+PAGOS"
 
-t1 = monto_limpio / (1 - RETENCION_POSNET_1)
-t3 = monto_limpio / (1 - RETENCION_POSNET_3)
-t6 = monto_limpio / (1 - RETENCION_POSNET_6)
+# --- NUEVA LÓGICA MATEMÁTICA ---
+t1 = monto_limpio / (1 - RETENCION_POSNET)
+t3 = t1 * INTERES_POSNET_3
+t6 = t1 * INTERES_POSNET_6
+# -------------------------------
 
-st.info(f"👉 **MONTO A TIPEAR EN LA MÁQUINA / LINK:** $ {t1:,.0f} (Monto bruto exacto con retención de +Pagos)")
+st.info(f"👉 **MONTO A TIPEAR EN LA MÁQUINA / LINK:** $ {t1:,.0f} (Monto base para absorber retención)")
 st.divider()
 st.markdown(f"""
 <div style='background:#d4edda;padding:10px;border-radius:5px;text-align:center;border:2px solid #28a745;'>
@@ -538,8 +542,9 @@ st.markdown(f"""
 st.write("**Presupuesto para el cliente:**")
 ca, cb, cc = st.columns(3)
 with ca: st.metric("1 PAGO / QR",   f"${t1:,.0f}")
-with cb: st.metric("3 CUOTAS (12%)", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
-with cc: st.metric("6 CUOTAS (19%)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
+# Le volé los porcentajes mentirosos de los títulos para que no te mareen más
+with cb: st.metric("3 CUOTAS", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
+with cc: st.metric("6 CUOTAS", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
 
 # 9. WHATSAPP (MULTI-COTIZADOR INTELIGENTE)
 st.divider()
@@ -579,10 +584,11 @@ for desc, precio in opciones:
     tiene_precio = precio > 0
     
     if tiene_desc and tiene_precio:
-        # ACA INYECTAMOS EL CÁLCULO BLINDADO DE CUOTAS
-        t1_op = precio / (1 - RETENCION_POSNET_1)
-        t3_op = precio / (1 - RETENCION_POSNET_3)
-        t6_op = precio / (1 - RETENCION_POSNET_6)
+        # --- CÁLCULO EXACTO ESPEJADO CON LA MÁQUINA ---
+        t1_op = precio / (1 - RETENCION_POSNET)
+        t3_op = t1_op * INTERES_POSNET_3
+        t6_op = t1_op * INTERES_POSNET_6
+        # ----------------------------------------------
         
         bloque = (
             f"⚙️ *{desc.strip()}*\n"
