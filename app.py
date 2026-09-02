@@ -543,8 +543,8 @@ st.write("**Presupuesto para el cliente:**")
 ca, cb, cc = st.columns(3)
 with ca: st.metric("1 PAGO / QR",   f"${t1:,.0f}")
 # Le volé los porcentajes mentirosos de los títulos para que no te mareen más
-with cb: st.metric("3 CUOTAS", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
-with cc: st.metric("6 CUOTAS", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
+with cb: st.metric("3 CUOTAS (+6.42%)", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
+with cc: st.metric("6 CUOTAS (+12.93%)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
 
 # 9. WHATSAPP (MULTI-COTIZADOR INTELIGENTE)
 st.divider()
