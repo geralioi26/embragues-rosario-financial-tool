@@ -610,9 +610,9 @@ for desc, precio in opciones:
         bloque = (
             f"⚙️ *{desc.strip()}*\n"
             f"💰 Contado/Transf: ${precio:,.0f}\n"
-            f"💳 Tarjeta 1 cuota: ${t1_op:,.0f}\n"
-            f"💳 Tarjeta 3 cuotas: ${t3_op:,.0f} (${t3_op/3:,.2f} c/u)\n"
-            f"💳 Tarjeta 6 cuotas: ${t6_op:,.0f} (${t6_op/6:,.2f} c/u)\n"
+            f"💳 Tarjeta Bancaria (Visa/Master) 1 pago: ${t1_op:,.0f}\n"
+            f"💳 Tarjeta Bancaria (Visa/Master) 3 cuotas: ${t3_op:,.0f} (${t3_op/3:,.2f} c/u)\n"
+            f"💳 Tarjeta Bancaria (Visa/Master) 6 cuotas: ${t6_op:,.0f} (${t6_op/6:,.2f} c/u)\n"
         )
         lineas_mensaje.append(bloque)
     elif tiene_desc and not tiene_precio:
@@ -629,7 +629,7 @@ for desc, precio in opciones:
 lineas_mensaje.append("📍 *Dirección:* Crespo 4117, Rosario")
 lineas_mensaje.append("📍 *Ubicación:* https://www.google.com/maps?q=Crespo+4117+Rosario")
 lineas_mensaje.append("📸 *Instagram:* @embraguesrosario")
-lineas_mensaje.append("⏰ *Horario:* 8:30 a 17:00 hs\n")
+lineas_mensaje.append("⏰ *Horario:* L a V de 9 a 17 hs | Sábados de 9:30 a 12:30 hs\n")
 lineas_mensaje.append("¡Te esperamos pronto! 👨🏻‍🔧")
 
 mensaje_final = "\n".join(lineas_mensaje)
