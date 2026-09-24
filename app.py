@@ -56,17 +56,15 @@ def leer_distribucion(): return _leer_fresca_base("Catalogo_Distribucion")
 # ==========================================
 # 4. COEFICIENTES FINANCIEROS (BLINDADOS EN CÓDIGO)
 # ==========================================
-# Retención plana del banco sobre el monto base que tipeás en el posnet
-RETENCION_POSNET = 0.0653  # 6.53% real comprobado con extracto BNA
+# MÁS PAGOS (Máquina vieja)
+RETENCION_POSNET = 0.0653  # 6.53% real comprobado
+INTERES_POSNET_3 = 1.0642  # El posnet suma automáticamente +6.42%
+INTERES_POSNET_6 = 1.1293  # El posnet suma automáticamente +12.93%
 
-# Recargos automáticos que hace la máquina de +Pagos al cliente:
-INTERES_POSNET_3 = 1.0642  # El posnet suma automáticamente +6.42% en 3 cuotas
-INTERES_POSNET_6 = 1.1293  # El posnet suma automáticamente +12.93% en 6 cuotas
-
-# Lógica operativa de la App:
-# 1. El cálculo base absorbe el 6.53% para que te entren los pesos exactos.
-# 2. Las opciones de 3 y 6 cuotas para WhatsApp multiplican ese monto base 
-#    por los intereses de la máquina, para que el cliente lea el número final.
+# PAYWAY (Máquina nueva)
+RETENCION_PAYWAY = 0.0242  # 2.42% arancel base para un pago
+INTERES_PAYWAY_3 = 1.0912  # Coeficiente exacto Payway 3 cuotas
+INTERES_PAYWAY_6 = 1.1870  # Coeficiente exacto Payway 6 cuotas
 
 # 5. CATÁLOGOS (Lectura Inicial)
 try:
@@ -469,7 +467,7 @@ estado_cliente = st.sidebar.selectbox("Estado del Cliente:", ["Pagado","Cuenta C
 f_pago_input = "N/A"
 if estado_cliente == "Pagado":
     f_pago_input = st.sidebar.selectbox("¿Cómo pagó?:", [
-        "Efectivo", "Transferencia", "Débito", "Más Pagos - Posnet/QR", "Más Pagos - Link", "Combinado", "Otro"], key=f"fpago_{fk}")
+        "Efectivo", "Transferencia", "Débito", "Payway - Posnet", "Más Pagos - Posnet/QR", "Más Pagos - Link", "Combinado", "Otro"], key=f"fpago_{fk}")
 
 if tipo_item != "Rectificación de Volante":
     estado_p_prov = st.sidebar.selectbox("Estado al Proveedor:", ["Pagado","Cuenta Corriente","N/A"], index=0, key=f"estprov_{fk}")
@@ -486,8 +484,11 @@ if st.sidebar.button("💾 GUARDAR VENTA", key=f"btn_guardar_{fk}"):
     
     if f_pago_input in ["Efectivo", "Transferencia"]:
         monto_neto_guardar = "-"
+    elif "Payway" in f_pago_input:
+        monto_bruto = int(round(monto_limpio / (1 - RETENCION_PAYWAY)))
+        monto_neto_guardar = monto_limpio
     elif "Más Pagos" in f_pago_input: 
-        monto_bruto = int(round(monto_limpio / (1 - RETENCION_POSNET_1)))
+        monto_bruto = int(round(monto_limpio / (1 - RETENCION_POSNET))) # Acá corregí el error de tipeo viejo
         monto_neto_guardar = monto_limpio
     
     factura_texto = "SI" if con_factura else "NO"
@@ -521,17 +522,22 @@ fk = st.session_state.form_key
 # -------------------------------------------------------------
 # -------------------------------------------------------------
 # 8. CALCULADORA DE CUOTAS
-st.markdown("### 💳 Calculadora de Cuotas (+Pagos Nación)")
+st.markdown("### 💳 Calculadora de Cuotas (Mostrador)")
 
-tipo_pos = st.radio("Herramienta de cobro:", ["POSNET / QR (En el local)", "LINK DE PAGO (A distancia)"], horizontal=True)
-nombre_pos = "+PAGOS"
+maquina_elegida = st.radio("¿Qué Posnet vas a usar para calcular acá?", ["Payway (Nuevo)", "Más Pagos (Viejo)"], horizontal=True)
 
-# --- LÓGICA MATEMÁTICA BLINDADA ---
-t1 = monto_limpio / (1 - RETENCION_POSNET)
-t3 = t1 * INTERES_POSNET_3
-t6 = t1 * INTERES_POSNET_6
+# --- LÓGICA MATEMÁTICA DINÁMICA ---
+if maquina_elegida == "Payway (Nuevo)":
+    t1 = monto_limpio / (1 - RETENCION_PAYWAY)
+    t3 = t1 * INTERES_PAYWAY_3
+    t6 = t1 * INTERES_PAYWAY_6
+else:
+    t1 = monto_limpio / (1 - RETENCION_POSNET)
+    t3 = t1 * INTERES_POSNET_3
+    t6 = t1 * INTERES_POSNET_6
 
-# --- CÁLCULO DEL PORCENTAJE REAL TOTAL (SOLO PARA TU PANTALLA) ---
+# --- CÁLCULO DEL PORCENTAJE REAL TOTAL ---
+pct_1 = ((t1 / monto_limpio) - 1) * 100 if monto_limpio > 0 else 0
 pct_3 = ((t3 / monto_limpio) - 1) * 100 if monto_limpio > 0 else 0
 pct_6 = ((t6 / monto_limpio) - 1) * 100 if monto_limpio > 0 else 0
 # -----------------------------------------------------------------
@@ -545,15 +551,17 @@ st.markdown(f"""
   <p style='margin:0;font-size:0.9em;'>(Este monto te queda limpio)</p>
 </div>""", unsafe_allow_html=True)
 
-st.write("**Presupuesto para el cliente:**")
+st.write(f"**Presupuesto con {maquina_elegida}:**")
 ca, cb, cc = st.columns(3)
-with ca: st.metric("1 PAGO / QR",   f"${t1:,.0f}")
+with ca: st.metric(f"1 PAGO (+{pct_1:.1f}%)",   f"${t1:,.0f}")
 with cb: st.metric(f"3 CUOTAS (+{pct_3:.1f}%)", f"${t3/3:,.2f}", f"Total: ${t3:,.0f}")
 with cc: st.metric(f"6 CUOTAS (+{pct_6:.1f}%)", f"${t6/6:,.2f}", f"Total: ${t6:,.0f}")
 
 # 9. WHATSAPP (MULTI-COTIZADOR INTELIGENTE)
 st.divider()
 st.markdown("### 📱 Armador de Presupuestos (WhatsApp)")
+
+promo_miercoles_sabado = st.checkbox("🎉 Aplicar Promo Miércoles/Sábados (3 Cuotas al precio de 1)", value=False)
 
 # Definimos tu frase de cabecera para las reparaciones
 texto_rep_default = "Reparado completo placa disco con forros originales volante rectificado y balanceado"
@@ -567,7 +575,6 @@ with st.expander("➕ Agregar opciones al presupuesto (Ej: Reparado, otras marca
         d4 = st.text_input("Opción 4 - Detalle:", key="d4")
         p4 = st.number_input("Opción 4 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p4")
     with col_w2:
-        # Aca inyectamos el texto predeterminado en la caja 3
         d3 = st.text_input("Opción 3 - Detalle (Reparado):", value=texto_rep_default, key="d3")
         p3 = st.number_input("Opción 3 - Precio Contado ($):", min_value=0, value=0, step=1000, key="p3")
 
@@ -589,10 +596,15 @@ for desc, precio in opciones:
     tiene_precio = precio > 0
     
     if tiene_desc and tiene_precio:
-        # --- CÁLCULO EXACTO ESPEJADO CON LA MÁQUINA ---
-        t1_op = precio / (1 - RETENCION_POSNET)
-        t3_op = t1_op * INTERES_POSNET_3
-        t6_op = t1_op * INTERES_POSNET_6
+        # --- CÁLCULO EXACTO ESTRICTAMENTE CON PAYWAY ---
+        t1_op = precio / (1 - RETENCION_PAYWAY)
+        t6_op = t1_op * INTERES_PAYWAY_6
+        
+        # Inyección de la promo: si está tildada, las 3 cuotas valen igual que 1.
+        if promo_miercoles_sabado:
+            t3_op = t1_op
+        else:
+            t3_op = t1_op * INTERES_PAYWAY_3
         # ----------------------------------------------
         
         bloque = (
@@ -604,7 +616,6 @@ for desc, precio in opciones:
         )
         lineas_mensaje.append(bloque)
     elif tiene_desc and not tiene_precio:
-        # Excepción táctica: si es la frase por defecto y está en $0, la saltea en silencio
         if desc.strip() == texto_rep_default.strip() and precio == 0:
             pass
         elif contador > 1:
